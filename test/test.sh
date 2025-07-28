@@ -39,12 +39,12 @@ test_unzip() {
 
 test_zip() {
 	init
-	echo "[***] Testing mzip+unzip with $1 (0 = store, 1 = deflate)"
+	echo "[***] Testing mzip $1 (0 = store, 1 = deflate)"
 	$MZ -c test.zip hello.txt world.txt -z$1 > /dev/null
 	unzip -l test.zip > files.txt
 	grep hello.txt files.txt > /dev/null || error "hello.txt not found"
 	grep world.txt files.txt > /dev/null || error "world.txt not found"
-	pwd
+	echo "[---] Decompressing with unzip"
 	{
 		mkdir data
 		cd data
@@ -54,6 +54,7 @@ test_zip() {
 		cd ..
 		rm -rf data
 	}
+	echo "[---] Decompressing with mzip"
 	{
 		mkdir -p data
 		cd data
@@ -68,9 +69,9 @@ test_zip() {
 
 # ---- #
 
-test_unzip "deflate" || exit 1
 test_unzip "store" || exit 1
+test_unzip "deflate" || exit 1
 
 test_zip "0" || exit 1
-# test_zip "1" || exit 1
+test_zip "1" || exit 1
 

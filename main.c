@@ -78,6 +78,12 @@ static int create_or_add_files(const char *path, char **files, int num_files, in
         return 1;
     }
     
+    /* Modify next entry to add to use specified compression method */
+    if (compression_method != 0) {
+        /* For this mzip structure, store the compression method in the mzip_archive */
+        ((struct mzip_archive *)za)->default_method = compression_method;
+    }
+    
     for (int i = 0; i < num_files; i++) {
         const char *filename = files[i];
         

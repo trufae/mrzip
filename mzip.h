@@ -59,6 +59,7 @@ struct mzip_archive {
     zip_uint64_t        n_entries;
     int                 mode;       /* 0=read-only, 1=write */
     zip_uint64_t        next_index; /* Next available index for adding files */
+    uint16_t            default_method; /* Default compression method for new entries */
 };
 
 struct mzip_file {

@@ -41,6 +41,8 @@
 #define Z_BUF_ERROR    (-5)
 #define Z_VERSION_ERROR (-6)
 
+#define Z_DEFLATED   8
+
 /* Flush values */
 #define Z_NO_FLUSH      0
 #define Z_PARTIAL_FLUSH 1
