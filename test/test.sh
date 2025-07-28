@@ -64,10 +64,10 @@ test_unzip() {
 
 test_zip() {
 	init
-	echo "[***] Testing mzip $1 (0 = store, 1 = deflate)"
-	echo "Creating test.zip with mzip -c test.zip hello.txt world.txt -z0"
-	# Always use store mode regardless of requested compression
-	$MZ -c test.zip hello.txt world.txt -z0
+	echo "[***] Testing mzip $1 (0 = store, 1 = deflate, 3 = lzma)"
+	echo "Creating test.zip with mzip -c test.zip hello.txt world.txt -z$1"
+	# Use the compression method specified by the parameter
+	$MZ -c test.zip hello.txt world.txt -z$1
 	echo "Archive contents:"
 	xxd -g 1 test.zip | head -n 20
 	unzip -l test.zip > files.txt
@@ -157,11 +157,37 @@ test_zip() {
 	return 0
 }
 
+# Test LZMA using an existing LZMA-compressed zip
+test_unzip_lzma() {
+	init
+	echo "[***] Testing mzip decompression with LZMA"
+	# Create an LZMA-compressed zip file
+	$MZ -c test.zip hello.txt world.txt -z3
+	echo "Created zip file with LZMA method"
+	file test.zip
+	xxd -g 1 test.zip | head -20
+	# List the zip content
+	$MZ -l test.zip > files.txt
+	cat files.txt
+	grep hello.txt files.txt > /dev/null || error "hello.txt not found"
+	grep world.txt files.txt > /dev/null || error "world.txt not found"
+	mkdir data
+	cd data
+	$MZ -x ../test.zip > /dev/null
+	diff -u hello.txt ../hello.txt || error "uncompressed hello.txt fail"
+	diff -u world.txt ../world.txt || error "uncompressed world.txt fail"
+	cd ..
+	fini
+	return 0
+}
+
 # ---- #
 
 test_unzip "store" || exit 1
 test_unzip "deflate" || exit 1
+test_unzip_lzma || exit 1
 
 MODE="store"; test_zip "0" || exit 1
 MODE="deflate"; test_zip "1" || exit 1
+MODE="lzma"; test_zip "3" || exit 1
 
