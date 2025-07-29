@@ -1,7 +1,10 @@
 # Makefile for mzip
 
-CC ?= gcc
-CFLAGS ?= -O2 -Wall
+CC?=gcc
+CFLAGS?=-O2 -Wall
+DESTDIR?=
+PREFIX?=/usr/local
+BINDIR?=$(PREFIX)/bin
 
 # Default compression algorithms to enable
 #COMPRESSION_FLAGS = -DMZIP_IMPLEMENTATION \
@@ -23,6 +26,14 @@ all: mzip
 
 mzip: mzip.c main.c config.h deflate.inc.c crc32.inc.c zstd.inc.c
 	$(CC) $(CFLAGS) $(COMPRESSION_FLAGS) -o $@ main.c mzip.c $(LIBS)
+
+install:
+	mkdir -p $(DESTDIR)$(BINDIR)
+	cp -f mzip $(DESTDIR)$(BINDIR)/mzip
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/mzip
+
 
 # Enable all supported compression methods
 all-compression: COMPRESSION_FLAGS += -DMZIP_ENABLE_ZSTD -DMZSTD_IMPLEMENTATION
