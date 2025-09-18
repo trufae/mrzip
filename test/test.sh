@@ -1,7 +1,7 @@
 #!/bin/sh
 
 D=tmp
-MZ=$(pwd)/mzip
+MZ=$(pwd)/../build/mzip
 
 init() {
 	rm -rf $D && mkdir -p $D && cd $D

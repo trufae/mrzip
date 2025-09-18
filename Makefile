@@ -16,7 +16,10 @@ install:
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/mzip
 
+test:
+	$(MAKE) -C test
+
 clean:
 	rm -rf build
 
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall test

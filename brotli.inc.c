@@ -68,7 +68,7 @@ int brotliInit(z_stream *strm, int level) {
     state->quality = clamp_quality(level);
     state->window_bits = 22;
     state->crc32 = 0;
-    strm->state = state;
+    strm->state = (struct internal_state *)state;
     strm->total_in = 0;
     strm->total_out = 0;
     return Z_OK;
@@ -76,7 +76,6 @@ int brotliInit(z_stream *strm, int level) {
 
 int brotliCompress(z_stream *strm, int flush) {
     if (!strm || !strm->state) return Z_STREAM_ERROR;
-    brotli_encoder_state *state = (brotli_encoder_state *)strm->state;
     if (flush == Z_FINISH) {
         size_t compressed_size = simple_compress(
             strm->next_in, strm->avail_in,
@@ -115,7 +114,7 @@ int brotliDecompressInit(z_stream *strm) {
     brotli_decoder_state *state = (brotli_decoder_state *)malloc(sizeof(brotli_decoder_state));
     if (!state) return Z_MEM_ERROR;
     state->crc32 = 0;
-    strm->state = state;
+    strm->state = (struct internal_state *)state;
     strm->total_in = 0;
     strm->total_out = 0;
     return Z_OK;
@@ -124,11 +123,22 @@ int brotliDecompressInit(z_stream *strm) {
 int brotliDecompress(z_stream *strm, int flush) {
     (void)flush;
     if (!strm || !strm->state) return Z_STREAM_ERROR;
-    brotli_decoder_state *state = (brotli_decoder_state *)strm->state;
     size_t decompressed_size = simple_decompress(
         strm->next_in, strm->avail_in,
         strm->next_out, strm->avail_out);
-    if (decompressed_size == 0) return Z_DATA_ERROR;
+    if (decompressed_size == 0) {
+        size_t stored_len;
+        if (strm->avail_in >= 5 + sizeof(size_t)) {
+            memcpy(&stored_len, strm->next_in + 5, sizeof(size_t));
+            if (stored_len == 0) {
+                strm->next_in += strm->avail_in;
+                strm->total_in += strm->avail_in;
+                strm->avail_in = 0;
+                return Z_STREAM_END;
+            }
+        }
+        return Z_DATA_ERROR;
+    }
     strm->next_in += strm->avail_in;
     strm->total_in += strm->avail_in;
     strm->avail_in = 0;
