@@ -2,6 +2,13 @@
 
 D=tmp
 MZ=$(pwd)/../build/mzip
+if [ ! -x "${MZ}" ]; then
+MZ=$(pwd)/../mzip
+if [ ! -x "${MZ}" ]; then
+	make -C ..
+fi
+fi
+
 
 init() {
 	rm -rf $D && mkdir -p $D && cd $D
