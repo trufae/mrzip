@@ -181,10 +181,12 @@ static int extract_all(const char *path) {
 		}
 
 		/* Write data and add proper termination for text files */
-		fwrite(zf->data, 1, zf->size, out);
-		fclose(out);
-		zip_fclose(zf);
-		printf("Extracted %s (%zu bytes)\n", fname, (size_t)zf->size);
+        fwrite(zf->data, 1, zf->size, out);
+        fclose(out);
+        /* Save size before closing – zip_fclose() frees the zip_file_t */
+        size_t entry_size = (size_t)zf->size;
+        zip_fclose(zf);
+        printf("Extracted %s (%zu bytes)\n", fname, entry_size);
 	}
 
 	zip_close(za);
