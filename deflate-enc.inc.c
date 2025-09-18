@@ -37,18 +37,24 @@ static int find_longest_match(deflate_state *state, const uint8_t *data,
 	/* Calculate hash for current position */
 	uint32_t hash = calculate_hash(data) & state->hash_mask;
 
-	/* Get position of potential match from hash table */
-	uint32_t chain_pos = state->hash_table[hash];
+    /* Get position of potential match from hash table.
+     * We store positions offset by +1 so that 0 means "no entry".
+     */
+    uint32_t stored = state->hash_table[hash];
 
-	/* Store current position in hash table (save position modulo 64K) */
-	state->hash_table[hash] = (uint16_t)(pos & 0xFFFF);
+    /* Store current position in hash table (save position modulo 64K) */
+    /* Save pos+1 so that 0 remains sentinel for "no previous" */
+    state->hash_table[hash] = (uint16_t)(((pos & 0xFFFF) + 1) & 0xFFFF);
 
-	/* No previous match at this hash */
-	if (chain_pos == 0) return 0;
+    /* No previous match at this hash */
+    if (stored == 0) return 0;
 
-	/* Don't look back too far */
-	const uint32_t max_dist = 32768;
-	if (pos > chain_pos + max_dist) return 0;
+    /* Recover actual stored position (subtract the +1) */
+    uint32_t chain_pos = (uint32_t)(stored - 1);
+
+    /* Don't look back too far (distance measured in window indices) */
+    const uint32_t max_dist = 32768;
+    if (pos > chain_pos + max_dist) return 0;
 
 	/* Find longest match */
 	uint32_t best_len = 0;
@@ -63,16 +69,22 @@ static int find_longest_match(deflate_state *state, const uint8_t *data,
 
 	/* Search for matches */
 	while (chain_pos > 0 && chain_len-- > 0) {
-		/* Quick check for 3-byte match at start */
-		if (data[0] == data[pos - chain_pos] &&
-				data[1] == data[pos - chain_pos + 1] &&
-				data[2] == data[pos - chain_pos + 2]) {
+        /* Quick check for 3-byte match at start.
+         * The previous occurrence is located in the circular sliding window at
+         * index `chain_pos & window_mask`. Compare bytes in the window to the
+         * input buffer `data`.
+         */
+        uint32_t win_idx = chain_pos & state->window_mask;
+        if (state->window[win_idx] == data[0] &&
+                state->window[(win_idx + 1) & state->window_mask] == data[1] &&
+                state->window[(win_idx + 2) & state->window_mask] == data[2]) {
 
-			/* Count matching bytes */
-			uint32_t len = 3;
-			while (len < max_len && data[len] == data[pos - chain_pos + len]) {
-				len++;
-			}
+            /* Count matching bytes */
+            uint32_t len = 3;
+            while (len < max_len &&
+                   state->window[(win_idx + len) & state->window_mask] == data[len]) {
+                len++;
+            }
 
 			/* Update best match if better */
 			if (len > best_len) {
