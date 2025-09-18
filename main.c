@@ -15,11 +15,12 @@
 
 static void usage(void) {
 	puts("mzip – minimal ZIP reader/writer (mzip.h demo)\n"
-			"Usage: mzip [-l | -x | -c | -a] <archive.zip> [files...] [options]\n"
+			"Usage: mzip [-l | -x | -c | -a | -v] <archive.zip> [files...] [options]\n"
 			"  -l   List contents\n"
 			"  -x   Extract all files into current directory\n"
 			"  -c   Create new archive with specified files\n"
-			"  -a   Add files to existing archive\n\n"
+			"  -a   Add files to existing archive\n"
+			"  -v   Show version number\n\n"
 			"Options:");
 
 	/* Show compression options based on what's enabled in config */
@@ -191,6 +192,16 @@ static int extract_all(const char *path) {
 }
 
 int main(int argc, char **argv) {
+	if (argc < 2) {
+		usage();
+		return 1;
+	}
+
+	if (strcmp(argv[1], "-v") == 0) {
+		printf("mzip version %s\n", MZIP_VERSION);
+		return 0;
+	}
+
 	if (argc < 3) {
 		usage();
 		return 1;
@@ -208,6 +219,10 @@ int main(int argc, char **argv) {
 	else if (strcmp(argv[1], "-x") == 0) mode_extract = 1;
 	else if (strcmp(argv[1], "-c") == 0) mode_create = 1;
 	else if (strcmp(argv[1], "-a") == 0) mode_append = 1;
+	else if (strcmp(argv[1], "-v") == 0) {
+		printf("mzip version %s\n", MZIP_VERSION);
+		return 0;
+	}
 	else {
 		usage();
 		return 1;
