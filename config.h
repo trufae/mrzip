@@ -9,7 +9,7 @@
 #define MZIP_CONFIG_H
 
 #define MZIP_VERSION_MAJOR 0
-#define MZIP_VERSION_MINOR 1
+#define MZIP_VERSION_MINOR 2
 #define MZIP_VERSION_PATCH 0
 
 #define MZIP_STRINGIFY(x) #x
