@@ -1,7 +1,7 @@
 #!/bin/sh
 
 D=tmp
-MZ=$(pwd)/../mzip
+MZ=$(pwd)/mzip
 
 init() {
 	rm -rf $D && mkdir -p $D && cd $D
@@ -186,11 +186,36 @@ test_unzip_lzma() {
 	return 0
 }
 
+# Test LZMA with 7z
+test_lzma_7z() {
+	init
+	echo "[***] Testing mzip LZMA decompression with 7z created archive"
+	# Create an LZMA-compressed zip file with 7z
+	7z a -tzip -mm=LZMA test.zip hello.txt world.txt
+	echo "Created zip file with 7z LZMA method"
+	file test.zip
+	xxd -g 1 test.zip | head -20
+	# List the zip content
+	$MZ -l test.zip > files.txt
+	cat files.txt
+	grep hello.txt files.txt > /dev/null || error "hello.txt not found"
+	grep world.txt files.txt > /dev/null || error "world.txt not found"
+	mkdir data
+	cd data
+	$MZ -x ../test.zip > /dev/null
+	diff -u hello.txt ../hello.txt || error "uncompressed hello.txt fail"
+	diff -u world.txt ../world.txt || error "uncompressed world.txt fail"
+	cd ..
+	fini
+	return 0
+}
+
 # ---- #
 
 test_unzip "store" || exit 1
 test_unzip "deflate" || exit 1
 test_unzip_lzma || exit 1
+test_lzma_7z || exit 1
 
 MODE="store"; test_zip "0" || exit 1
 MODE="deflate"; test_zip "1" || exit 1
@@ -269,20 +294,38 @@ test_duplicate_names_listing() {
 }
 
 test_space_in_name() {
-    init
-    echo "[***] Testing filename with spaces"
-    printf "spaced content\n" > "space name.txt"
+     init
+     echo "[***] Testing filename with spaces"
+     printf "spaced content\n" > "space name.txt"
+      for Z in 0 1 3 5 93 100; do
+         rm -f test.zip
+         $MZ -c test.zip "space name.txt" -z$Z || error "mzip failed for -z$Z"
+         $MZ -l test.zip | grep "space name.txt" >/dev/null || error "missing spaced name (-z$Z)"
+         mkdir -p data && cd data
+         $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
+         diff -u "space name.txt" ../"space name.txt" || error "spaced filename mismatch (-z$Z)"
+         cd .. && rm -rf data
+     done
+     fini
+ }
+
+test_large_file() {
+     init
+     echo "[***] Testing large file (1MB) with store/deflate/lzma/brotli/zstd/lzfse"
+     # Create a 1MB random file
+     dd if=/dev/urandom of=large.bin bs=1k count=1024 2>/dev/null || error "cannot create large file"
      for Z in 0 1 3 5 93 100; do
-        rm -f test.zip
-        $MZ -c test.zip "space name.txt" -z$Z || error "mzip failed for -z$Z"
-        $MZ -l test.zip | grep "space name.txt" >/dev/null || error "missing spaced name (-z$Z)"
-        mkdir -p data && cd data
-        $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
-        diff -u "space name.txt" ../"space name.txt" || error "spaced filename mismatch (-z$Z)"
-        cd .. && rm -rf data
-    done
-    fini
-}
+         rm -f test.zip
+         $MZ -c test.zip large.bin -z$Z || error "mzip failed for -z$Z"
+         unzip -l test.zip > files.txt || error "unzip -l failed"
+         grep "large.bin" files.txt >/dev/null || error "large.bin missing (-z$Z)"
+         mkdir -p data && cd data
+         $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
+         cmp -s large.bin ../large.bin || error "large.bin mismatch (-z$Z)"
+         cd .. && rm -rf data
+     done
+     fini
+ }
 
 # Run new tests
 test_empty_files || exit 1
@@ -290,3 +333,4 @@ test_binary_file || exit 1
 test_large_random_and_fallback || exit 1
 test_duplicate_names_listing || exit 1
 test_space_in_name || exit 1
+test_large_file || exit 1
