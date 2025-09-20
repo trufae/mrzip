@@ -59,6 +59,9 @@ static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
 		uint32_t central_dir_size, uint32_t central_dir_offset);
 static int mzip_finalize_archive(zip_t *za);
 
+/* Global flag: when non-zero, verify CRC32 on extraction and fail on mismatch. */
+int mzip_verify_crc = 0;
+
 /* helper: little-endian readers/writers (ZIP format is little-endian) */
 
 /* Date/time conversion for ZIP entries */
@@ -270,34 +273,35 @@ static int mzip_load_central(zip_t *za) {
 
 /* load entire (uncompressed) file into memory and hand ownership to caller */
 static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf, uint32_t *out_sz) {
-	/* move to local header */
-	if (fseek (za->fp, e->local_hdr_ofs, SEEK_SET) != 0) {
-		return -1;
-	}
-	uint8_t lfh[30];
-	if (mzip_read_fully (za->fp, lfh, 30) != 0) {
-		return -1;
-	}
+    /* move to local header */
+    if (fseek (za->fp, e->local_hdr_ofs, SEEK_SET) != 0) {
+        return -1;
+    }
+    uint8_t lfh[30];
+    if (mzip_read_fully (za->fp, lfh, 30) != 0) {
+        return -1;
+    }
 	if (mzip_rd32 (lfh) != MZIP_SIG_LFH) {
 		return -1;
 	}
 	uint16_t fn_len = mzip_rd16 (lfh + 26);
 	uint16_t extra_len = mzip_rd16 (lfh + 28);
 
-	/* skip filename + extra */
-	if (fseek (za->fp, fn_len + extra_len, SEEK_CUR) != 0) {
-		return -1;
-	}
+    /* skip filename + extra */
+    if (fseek (za->fp, fn_len + extra_len, SEEK_CUR) != 0) {
+        fprintf(stderr, "mzip: failed to skip filename/extra (%u + %u)\n", fn_len, extra_len);
+        return -1;
+    }
 
 	/* read compressed data */
-	uint8_t *cbuf = (uint8_t*)malloc (e->comp_size);
-	if (!cbuf) {
-		return -1;
-	}
-	if (mzip_read_fully(za->fp, cbuf, e->comp_size) != 0) {
-		free (cbuf);
-		return -1;
-	}
+    uint8_t *cbuf = (uint8_t*)malloc (e->comp_size);
+    if (!cbuf) {
+        return -1;
+    }
+    if (mzip_read_fully(za->fp, cbuf, e->comp_size) != 0) {
+        free (cbuf);
+        return -1;
+    }
 
 	uint8_t *ubuf;
 #ifdef MZIP_ENABLE_STORE
@@ -502,9 +506,25 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		free (cbuf);
 		return -1; /* unsupported method */
 	}
-	*out_buf = ubuf;
-	*out_sz  = e->uncomp_size;
-	return 0;
+    /* Verify CRC32 of uncompressed data if requested or warn on mismatch. */
+    {
+        uint32_t computed_crc = mzip_crc32(0, ubuf, e->uncomp_size);
+        if (computed_crc != e->crc32) {
+            if (mzip_verify_crc) {
+                /* On strict verify, treat mismatch as fatal for this entry. */
+                free(ubuf);
+                return -1;
+            } else {
+                /* Non-strict mode: warn but continue. */
+                fprintf(stderr, "Warning: CRC mismatch for '%s' (expected 0x%08x, got 0x%08x)\n",
+                        e->name ? e->name : "<unknown>", e->crc32, computed_crc);
+            }
+        }
+    }
+
+    *out_buf = ubuf;
+    *out_sz  = e->uncomp_size;
+    return 0;
 }
 
 /* --------------  public API implementation  --------------- */

@@ -59,6 +59,7 @@ static void usage(void) {
          "      reject (default)  - reject entries with absolute paths, empty names, '..' that escape, or symlink parents\n"
          "      strip             - remove leading '..' components that would escape (e.g., '../../a' -> 'a')\n"
          "      allow             - allow unsafe extraction (use with caution)\n");
+    puts("  --verify-crc    Verify CRC32 when extracting and fail on mismatch\n");
 }
 
 static int list_files(const char *path) {
@@ -195,30 +196,38 @@ static int sanitize_extract_path(const char *name, char *out, size_t outlen) {
     /* Tokenize and resolve '.' and '..' without touching the filesystem */
     char *segments[PATH_MAX / 2];
     int segc = 0;
-    char *saveptr = NULL;
-    char *tok = strtok_r(tmp, "/", &saveptr);
-    while (tok) {
-        if (strcmp(tok, "") == 0 || strcmp(tok, ".") == 0) {
+    /* Manual tokenization to avoid dependency on strtok_r feature macros */
+    char *p = tmp;
+    while (*p) {
+        /* skip multiple slashes */
+        while (*p == '/') p++;
+        if (!*p) break;
+        char *start = p;
+        while (*p && *p != '/') p++;
+        /* temporarily terminate segment */
+        char saved = *p;
+        *p = '\0';
+        if (strcmp(start, "") == 0 || strcmp(start, ".") == 0) {
             /* skip */
-        } else if (strcmp(tok, "..") == 0) {
+        } else if (strcmp(start, "..") == 0) {
             if (segc == 0) {
                 if (g_extract_policy == POLICY_REJECT) {
-                    /* would escape extraction root */
                     return -1;
                 } else if (g_extract_policy == POLICY_STRIP) {
-                    /* drop this leading .. component */
-                    /* just continue without pushing */
+                    /* drop leading .. */
                 } else {
-                    /* POLICY_ALLOW: allow moving up but do not actually escape since
-                     * we are not resolving against filesystem; treat as no-op */
+                    /* POLICY_ALLOW: treat as no-op */
                 }
             } else {
                 segc--;
             }
         } else {
-            segments[segc++] = tok;
+            if (segc < (int)(PATH_MAX / 2)) segments[segc++] = start;
         }
-        tok = strtok_r(NULL, "/", &saveptr);
+        if (saved == '\0') break;
+        *p = saved;
+        /* move past '/' */
+        if (*p == '/') p++;
     }
 
     if (segc == 0) return -1; /* empty or only dots */
@@ -461,14 +470,22 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	/* Parse CRC verification option: --verify-crc */
+	for (i = 3; i < argc; i++) {
+		if (strcmp(argv[i], "--verify-crc") == 0) {
+			/* enable strict CRC verification in the mzip backend */
+			mzip_verify_crc = 1;
+		}
+	}
+
 	if (mode_list) {
-		if (argc != 3) {
+		if (argc < 3) {
 			usage();
 			return 1;
 		}
 		return list_files(zip_path);
 	} else if (mode_extract) {
-		if (argc != 3) {
+		if (argc < 3) {
 			usage();
 			return 1;
 		}

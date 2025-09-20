@@ -147,4 +147,15 @@ int            zip_set_file_compression(zip_t *za, zip_uint64_t index, zip_int32
 } /* extern "C" */
 #endif
 
+/* Global flag: when non-zero, verify CRC32 on extraction and fail on mismatch. */
+extern int mzip_verify_crc;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif /* MZIP_H_ */
