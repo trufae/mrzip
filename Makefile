@@ -6,8 +6,8 @@ BINDIR?=$(PREFIX)/bin
 
 all: mzip
 
-mzip: main.c mzip.c mzip.h config.h
-	$(CC) $(CFLAGS) -o mzip main.c mzip.c
+mzip: src/main.c src/lib/mzip.c src/include/mzip.h src/include/config.h
+	$(CC) $(CFLAGS) -I src/include -o mzip src/main.c src/lib/mzip.c
 
 mall:
 	meson build && ninja -C build
