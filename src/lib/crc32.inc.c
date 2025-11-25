@@ -35,7 +35,7 @@ static const uint32_t crc32_table[256] = {
 };
 
 /* Calculate CRC-32 checksum (standard reversed polynomial) */
-static uint32_t mzip_crc32(uint32_t crc, const void *buf, size_t len) {
+static uint32_t otezip_crc32(uint32_t crc, const void *buf, size_t len) {
 	const uint8_t *p = (const uint8_t *)buf;
 	crc = ~crc;
 	for (size_t i = 0; i < len; i++) {

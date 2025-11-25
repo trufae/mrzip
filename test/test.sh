@@ -1,9 +1,9 @@
 #!/bin/sh
 
 D=tmp
-MZ=$(pwd)/../build/mzip
+MZ=$(pwd)/../build/otezip
 if [ ! -x "${MZ}" ]; then
-MZ=$(pwd)/../mzip
+MZ=$(pwd)/../otezip
 if [ ! -x "${MZ}" ]; then
 	make -C ..
 fi
@@ -44,7 +44,7 @@ error() {
 
 test_unzip() {
 	init
-	echo "[***] Testing zip+mzip with $1"
+	echo "[***] Testing zip+otezip with $1"
 	# Always use the standard method (store for now)
 	if [ "$1" = "store" ]; then
 		zip -0 test.zip hello.txt world.txt
@@ -71,8 +71,8 @@ test_unzip() {
 
 test_zip() {
      init
-     echo "[***] Testing mzip $1 (0 = store, 1 = deflate, 3 = lzma, 5 = brotli, 93 = zstd, 100 = lzfse)"
-    echo "Creating test.zip with mzip -c test.zip hello.txt world.txt -z$1"
+     echo "[***] Testing otezip $1 (0 = store, 1 = deflate, 3 = lzma, 5 = brotli, 93 = zstd, 100 = lzfse)"
+    echo "Creating test.zip with otezip -c test.zip hello.txt world.txt -z$1"
     # Use the compression method specified by the parameter
     $MZ -c test.zip hello.txt world.txt -z$1
     echo "Archive contents:"
@@ -131,12 +131,12 @@ test_zip() {
     else
         echo "[---] Skipping unzip extraction for brotli (method 97)"
     fi
-	echo "[---] Decompressing with mzip"
+	echo "[---] Decompressing with otezip"
 	{
 		mkdir -p data
 		cd data
 		$MZ -x ../test.zip
-		echo "mzip-extracted hello.txt:"
+		echo "otezip-extracted hello.txt:"
 		hexdump -C hello.txt
 		echo "original hello.txt:"
 		hexdump -C ../hello.txt
@@ -145,12 +145,12 @@ test_zip() {
 		echo "CONTENT LENGTH: $(wc -c < hello.txt) bytes"
 		cat ../hello.txt | od -c
 		echo "CONTENT LENGTH: $(wc -c < ../hello.txt) bytes"
-		
+
 		# Simple string comparison - extract just the word without newlines
 		echo "EXTRACTING JUST THE WORD:"
 		WORD1=$(tr -d '\r\n' < hello.txt)
 		WORD2=$(tr -d '\r\n' < ../hello.txt)
-		echo "Word from mzip: '$WORD1'"
+		echo "Word from otezip: '$WORD1'"
 		echo "Word from original: '$WORD2'"
 		
 		# Compare the words
@@ -172,7 +172,7 @@ test_zip() {
 # Test LZMA using an existing LZMA-compressed zip
 test_unzip_lzma() {
 	init
-	echo "[***] Testing mzip decompression with LZMA"
+	echo "[***] Testing otezip decompression with LZMA"
 	# Create an LZMA-compressed zip file
 	$MZ -c test.zip hello.txt world.txt -z3
 	echo "Created zip file with LZMA method"
@@ -196,7 +196,7 @@ test_unzip_lzma() {
 # Test LZMA with 7z
 test_lzma_7z() {
 	init
-	echo "[***] Testing mzip LZMA decompression with 7z created archive"
+	echo "[***] Testing otezip LZMA decompression with 7z created archive"
 	# Create an LZMA-compressed zip file with 7z
 	7z a -tzip -mm=LZMA test.zip hello.txt world.txt
 	echo "Created zip file with 7z LZMA method"
@@ -239,7 +239,7 @@ test_empty_files() {
      : > empty.txt
      for Z in 0 1 3 5 93 100; do
         rm -f test.zip
-        $MZ -c test.zip empty.txt -z$Z || error "mzip failed for -z$Z"
+        $MZ -c test.zip empty.txt -z$Z || error "otezip failed for -z$Z"
         unzip -l test.zip > files.txt || error "unzip -l failed"
         grep "empty.txt" files.txt >/dev/null || error "empty.txt missing (-z$Z)"
         mkdir -p data && cd data
@@ -259,7 +259,7 @@ test_binary_file() {
     while [ $i -lt 256 ]; do printf "\\$(printf '%03o' $i)" >> bin.dat; i=$((i+1)); done
      for Z in 0 1 3 5 93 100; do
         rm -f test.zip
-        $MZ -c test.zip bin.dat -z$Z || error "mzip failed for -z$Z"
+        $MZ -c test.zip bin.dat -z$Z || error "otezip failed for -z$Z"
         unzip -l test.zip > files.txt || error "unzip -l failed"
         grep "bin.dat" files.txt >/dev/null || error "bin.dat missing (-z$Z)"
         mkdir -p data && cd data
@@ -274,7 +274,7 @@ test_large_random_and_fallback() {
     init
     echo "[***] Testing random data with LZMA (validate robust handling)"
     dd if=/dev/urandom of=rand.bin bs=1k count=4 2>/dev/null || error "cannot create random"
-    $MZ -c test.zip rand.bin -z3 || error "mzip failed -z3"
+    $MZ -c test.zip rand.bin -z3 || error "otezip failed -z3"
     # Validate archive and extraction
     unzip -l test.zip > files.txt || error "unzip -l failed"
     grep "rand.bin" files.txt >/dev/null || error "rand.bin missing"
@@ -292,7 +292,7 @@ test_duplicate_names_listing() {
     echo one > a/dup.txt
     echo two > b/dup.txt
     # Add both; tool stores base names, creating two entries with same name
-    $MZ -c test.zip a/dup.txt b/dup.txt -z1 || error "mzip failed"
+    $MZ -c test.zip a/dup.txt b/dup.txt -z1 || error "otezip failed"
     out=$($MZ -l test.zip)
     echo "$out"
     cnt=$(printf "%s" "$out" | grep -c "dup.txt")
@@ -306,7 +306,7 @@ test_space_in_name() {
      printf "spaced content\n" > "space name.txt"
       for Z in 0 1 3 5 93 100; do
          rm -f test.zip
-         $MZ -c test.zip "space name.txt" -z$Z || error "mzip failed for -z$Z"
+         $MZ -c test.zip "space name.txt" -z$Z || error "otezip failed for -z$Z"
          $MZ -l test.zip | grep "space name.txt" >/dev/null || error "missing spaced name (-z$Z)"
          mkdir -p data && cd data
          $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
@@ -323,7 +323,7 @@ test_large_file() {
      dd if=/dev/urandom of=large.bin bs=1k count=1024 2>/dev/null || error "cannot create large file"
      for Z in 0 1 3 5 93 100; do
          rm -f test.zip
-         $MZ -c test.zip large.bin -z$Z || error "mzip failed for -z$Z"
+         $MZ -c test.zip large.bin -z$Z || error "otezip failed for -z$Z"
          unzip -l test.zip > files.txt || error "unzip -l failed"
          grep "large.bin" files.txt >/dev/null || error "large.bin missing (-z$Z)"
          mkdir -p data && cd data

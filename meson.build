@@ -1,7 +1,7 @@
-project('mzip', 'c',
+project('otezip', 'c',
   version : '0.2.0',
   default_options : ['c_std=c99', 'warning_level=2'])
 
-executable('mzip', 'src/main.c', 'src/lib/mzip.c',
+executable('otezip', 'src/main.c', 'src/lib/otezip.c',
   include_directories: include_directories('src/include'),
   install : true)

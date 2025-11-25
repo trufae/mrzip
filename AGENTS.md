@@ -1,8 +1,8 @@
-# Agent Instructions for the MZIP project
+# Agent Instructions for the OTEZIP project
 
 ## Project Structure & Module Organization
 
-- Source: `src/lib/mzip.c`, `src/main.c`, headers in `src/include/mzip.h`, config in `src/include/config.h`.
+- Source: `src/lib/otezip.c`, `src/main.c`, headers in `src/include/otezip.h`, config in `src/include/config.h`.
 - Algorithms: minimalistic, but fully functional implementations for every compression algorithm `src/lib/*.inc.c` (deflate, lzma, brotli, zstd, lzfse).
 - Tests: integration script `test/test.sh` and unit tests in `test/unit/`. Sample assets in `test/` (e.g., `test.zip`, sample files).
 
@@ -13,20 +13,20 @@
 - Install/uninstall: `make install` / `make uninstall`
 - Run tests: `make -C test` (builds unit tests, runs integration script)
 - Quick usage examples:
-  - Create: `./mzip -c out.zip file1 file2 -z1` (deflate)
-  - List: `./mzip -l out.zip`
-  - Extract: `./mzip -x out.zip`
+  - Create: `./otezip -c out.zip file1 file2 -z1` (deflate)
+  - List: `./otezip -l out.zip`
+  - Extract: `./otezip -x out.zip`
 
 ## Coding Style & Naming Conventions
 
 - Language: C (C99). Aim for warning-free builds with `-Wall`/`-Wextra`.
 - Indentation: tabs preferred (match existing files). Keep lines concise.
-- File naming: core in `mzip.*`; algorithms as `name-*.inc.c`; tests as `test_*.c` and `test_*.sh`.
-- Preprocessor: guard features with `MZIP_ENABLE_*` and reuse `MZIP_METHOD_*` IDs from `config.h`.
+- File naming: core in `otezip.*`; algorithms as `name-*.inc.c`; tests as `test_*.c` and `test_*.sh`.
+- Preprocessor: guard features with `OTEZIP_ENABLE_*` and reuse `OTEZIP_METHOD_*` IDs from `config.h`.
 
 ## Testing Guidelines
 - Unit tests: add focused tests in `test/unit/` and register in `test/unit/Makefile`.
-- Integration: extend `test/test.sh` for end-to-end flows (create, list, extract). For nonstandard ZIP methods (e.g., Brotli=97), prefer verifying with `mzip` extraction; `unzip` may not support them.
+- Integration: extend `test/test.sh` for end-to-end flows (create, list, extract). For nonstandard ZIP methods (e.g., Brotli=97), prefer verifying with `otezip` extraction; `unzip` may not support them.
 - Run locally with `make -C test`; ensure added tests are deterministic and cleanup temp dirs.
 
 ## Commit & Pull Request Guidelines

@@ -1,4 +1,4 @@
-/* mzip.h – Minimalistic libzip subset replacement
+/* otezip.h – Minimalistic libzip subset replacement
  * Version: 0.2 (2025-07-27)
  *
  * This library provides a tiny subset of the libzip API so that
@@ -22,8 +22,8 @@
  *
  * License: MIT / 0-BSD – do whatever you want; attribution appreciated.
  */
-#ifndef MZIP_H_
-#define MZIP_H_
+#ifndef OTEZIP_H_
+#define OTEZIP_H_
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -37,28 +37,28 @@
  * (ZIP and other custom in-repo formats). These are static inline so they
  * can be used from any compilation unit including the compression backends.
  */
-static inline uint16_t mzip_read_le16(const uint8_t *p) {
+static inline uint16_t otezip_read_le16(const uint8_t *p) {
     return (uint16_t)(p[0] | (p[1] << 8));
 }
-static inline uint32_t mzip_read_le32(const uint8_t *p) {
+static inline uint32_t otezip_read_le32(const uint8_t *p) {
     return (uint32_t)(p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24));
 }
-static inline uint64_t mzip_read_le64(const uint8_t *p) {
+static inline uint64_t otezip_read_le64(const uint8_t *p) {
     uint64_t v = 0;
     for (int i = 0; i < 8; ++i) v |= ((uint64_t)p[i]) << (i * 8);
     return v;
 }
-static inline void mzip_write_le16(uint8_t *p, uint16_t v) {
+static inline void otezip_write_le16(uint8_t *p, uint16_t v) {
     p[0] = (uint8_t)(v & 0xFF);
     p[1] = (uint8_t)((v >> 8) & 0xFF);
 }
-static inline void mzip_write_le32(uint8_t *p, uint32_t v) {
+static inline void otezip_write_le32(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)(v & 0xFF);
     p[1] = (uint8_t)((v >> 8) & 0xFF);
     p[2] = (uint8_t)((v >> 16) & 0xFF);
     p[3] = (uint8_t)((v >> 24) & 0xFF);
 }
-static inline void mzip_write_le64(uint8_t *p, uint64_t v) {
+static inline void otezip_write_le64(uint8_t *p, uint64_t v) {
     for (int i = 0; i < 8; ++i) p[i] = (uint8_t)((v >> (i * 8)) & 0xFF);
 }
 
@@ -71,7 +71,7 @@ typedef int32_t  zip_int32_t;
 typedef uint32_t zip_uint32_t;
 
 /* an in-memory representation of a single directory entry */
-struct mzip_entry {
+struct otezip_entry {
     char      *name;                /* zero-terminated filename              */
     uint32_t   local_hdr_ofs;       /* offset of corresponding LFH          */
     uint32_t   comp_size;
@@ -83,29 +83,29 @@ struct mzip_entry {
     uint32_t   external_attr;       /* External file attributes (permissions) */
 };
 
-struct mzip_archive {
+struct otezip_archive {
     FILE               *fp;
-    struct mzip_entry  *entries;
+    struct otezip_entry  *entries;
     zip_uint64_t        n_entries;
     int                 mode;       /* 0=read-only, 1=write */
     zip_uint64_t        next_index; /* Next available index for adding files */
     uint16_t            default_method; /* Default compression method for new entries */
 };
 
-struct mzip_file {
+struct otezip_file {
     uint8_t   *data;   /* complete uncompressed data                 */
     uint32_t   size;
 };
 
-struct mzip_src_buf { 
+struct otezip_src_buf { 
     const void *buf;
     zip_uint64_t len;
     int freep;
 };
 
-typedef struct mzip_archive   zip_t;      /* opaque archive handle        */
-typedef struct mzip_file      zip_file_t; /* opaque file-in-memory handle */
-typedef struct mzip_src_buf   zip_source_t;/* stub                          */
+typedef struct otezip_archive   zip_t;      /* opaque archive handle        */
+typedef struct otezip_file      zip_file_t; /* opaque file-in-memory handle */
+typedef struct otezip_src_buf   zip_source_t;/* stub                          */
 
 /* Only flag we meaningfully accept at the moment. */
 #ifndef ZIP_RDONLY
@@ -148,16 +148,16 @@ int            zip_set_file_compression(zip_t *za, zip_uint64_t index, zip_int32
 #endif
 
 /* Global flag: when non-zero, verify CRC32 on extraction and fail on mismatch. */
-extern int mzip_verify_crc;
+extern int otezip_verify_crc;
 
 /* Zipbomb / expansion protection globals.
- * - mzip_max_expansion_ratio: maximum allowed multiplier (out <= in * ratio + slack)
- * - mzip_max_expansion_slack: additional bytes allowed regardless of ratio
- * - mzip_ignore_zipbomb: when non-zero, skip the expansion checks (CLI override)
+ * - otezip_max_expansion_ratio: maximum allowed multiplier (out <= in * ratio + slack)
+ * - otezip_max_expansion_slack: additional bytes allowed regardless of ratio
+ * - otezip_ignore_zipbomb: when non-zero, skip the expansion checks (CLI override)
  */
-extern uint64_t mzip_max_expansion_ratio;
-extern uint64_t mzip_max_expansion_slack;
-extern int mzip_ignore_zipbomb;
+extern uint64_t otezip_max_expansion_ratio;
+extern uint64_t otezip_max_expansion_slack;
+extern int otezip_ignore_zipbomb;
 
 #ifdef __cplusplus
 extern "C" {
@@ -167,4 +167,4 @@ extern "C" {
 } /* extern "C" */
 #endif
 
-#endif /* MZIP_H_ */
+#endif /* OTEZIP_H_ */

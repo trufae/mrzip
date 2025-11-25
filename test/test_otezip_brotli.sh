@@ -1,5 +1,5 @@
 #!/bin/bash
-# test_mzip_brotli.sh - Test Brotli compression/decompression in mzip
+# test_otezip_brotli.sh - Test Brotli compression/decompression in otezip
 #
 # This script tests the Brotli compression and decompression functionality
 # in mzip by:
@@ -22,7 +22,7 @@ TEST_DIR="$(pwd)/test_brotli_tmp"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
-echo "=== Testing mzip with Brotli compression ==="
+echo "=== Testing otezip with Brotli compression ==="
 echo
 
 # Create test files
@@ -34,17 +34,17 @@ dd if=/dev/urandom of=test3.bin bs=1k count=10 2>/dev/null
 # Binary with repeated pattern (highly compressible)
 perl -e 'print "A" x 10000' > test4.bin
 
-# Build mzip with Brotli support if not already built
-if [ ! -x "../mzip" ]; then
-    echo "Building mzip with Brotli support..."
+# Build otezip with Brotli support if not already built
+if [ ! -x "../otezip" ]; then
+    echo "Building otezip with Brotli support..."
     cd ..
     make clean
-    make MZIP_ENABLE_BROTLI=1
+    make OTEZIP_ENABLE_BROTLI=1
     cd "$TEST_DIR"
 fi
 
-# Path to mzip executable
-MZIP="../mzip"
+# Path to otezip executable
+MZIP="../otezip"
 
 # Create ZIP file with Brotli compression
 echo "Creating ZIP file with Brotli compression..."

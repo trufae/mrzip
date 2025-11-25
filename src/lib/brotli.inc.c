@@ -1,13 +1,13 @@
-#ifndef MBROTLI_H
-#define MBROTLI_H
+#ifndef OBROTLI_H
+#define OBROTLI_H
 
-#ifdef MZIP_ENABLE_BROTLI
+#ifdef OTEZIP_ENABLE_BROTLI
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "../include/zstream.h"
-#include "mzip.h" /* for read/write little-endian helpers */
+#include "otezip.h" /* for read/write little-endian helpers */
 
 typedef struct {
 	int quality;
@@ -47,9 +47,9 @@ static size_t simple_compress(const uint8_t *input, size_t input_len,
 	output[4] = 1;
 	/* Store length/checksum in little-endian fixed widths to be portable
 	 * across architectures (avoid writing host-endian `size_t`). */
-	mzip_write_le64 (output + 5, (uint64_t)input_len);
+	otezip_write_le64 (output + 5, (uint64_t)input_len);
 	uint32_t checksum = my_crc32 (input, input_len, 0);
-	mzip_write_le32 (output + 5 + 8, checksum);
+	otezip_write_le32 (output + 5 + 8, checksum);
 	memcpy (output + 5 + 8 + 4, input, input_len);
 	return (size_t) (5 + 8 + 4 + input_len);
 }
@@ -63,14 +63,14 @@ static size_t simple_decompress(const uint8_t *input, size_t input_len,
 		return 0;
 	}
 	/* Read fixed-width little-endian length and checksum */
-	uint64_t stored_len = mzip_read_le64 (input + 5);
+	uint64_t stored_len = otezip_read_le64 (input + 5);
 	if (stored_len > output_len) {
 		return 0;
 	}
 	if (input_len < 5 + 8 + 4 + stored_len) {
 		return 0;
 	}
-	uint32_t stored_crc = mzip_read_le32 (input + 5 + 8);
+	uint32_t stored_crc = otezip_read_le32 (input + 5 + 8);
 	const uint8_t *data = input + 5 + sizeof (size_t) + sizeof (uint32_t);
 	uint32_t computed_crc = my_crc32 (data, stored_len, 0);
 	if (stored_crc != computed_crc) {
@@ -163,7 +163,7 @@ int brotliDecompress(z_stream *strm, int flush) {
 		strm->next_out, strm->avail_out);
 	if (decompressed_size == 0) {
 		if (strm->avail_in >= 5 + 8) {
-			uint64_t stored_len_tmp = mzip_read_le64 (strm->next_in + 5);
+			uint64_t stored_len_tmp = otezip_read_le64 (strm->next_in + 5);
 			if (stored_len_tmp == 0) {
 				strm->next_in += strm->avail_in;
 				strm->total_in += strm->avail_in;

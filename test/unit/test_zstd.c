@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /* Include ZSTD implementation */
-#define MZIP_ENABLE_ZSTD
+#define OTEZIP_ENABLE_ZSTD
 #include "../../src/lib/zstd.inc.c"
 
 /* Simple test to compress and decompress data using ZSTD */

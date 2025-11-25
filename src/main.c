@@ -1,5 +1,5 @@
-/* main.c – Tiny demo utility for mzip.h
- * Build:  gcc -std=c99 -DMZIP_IMPLEMENTATION main.c -lz -o mzip
+/* main.c – Tiny demo utility for otezip.h
+ * Build:  gcc -std=c99 -DOTEZIP_IMPLEMENTATION main.c -lz -o otezip
  * Usage:  ./mzip -l  archive.zip   # list files
  *         ./mzip -x  archive.zip   # extract into current directory
  *         ./mzip -c  archive.zip file1 file2...  # create new zip archive
@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "config.h"
-#include "mzip.h"
+#include "otezip.h"
 
 #include <limits.h>
 #include <sys/stat.h>
@@ -36,23 +36,23 @@ static int g_force = 0;
  * - mingw/msvc provide mkdir (const char*)/_mkdir and no lstat/S_ISLNK by default.
  * - Provide small wrappers/macros so the rest of the code can use portable names. */
 #if defined(_WIN32) || defined(_WIN64)
-#define MZIP_MKDIR(path, mode) _mkdir (path)
-#define MZIP_LSTAT(path, buf) stat((path),(buf))
-#ifndef MZIP_FCHMOD
+#define OTEZIP_MKDIR(path, mode) _mkdir (path)
+#define OTEZIP_LSTAT(path, buf) stat((path),(buf))
+#ifndef OTEZIP_FCHMOD
 /* On Windows (MinGW/MSVC) there's no reliable fchmod that maps to POSIX
  * permissions. Setting unix-style permission bits isn't meaningful on NTFS in
  * the same way; failures are non-fatal in extraction code, so make this a
  * no-op that reports success. If a platform provides an fd-based fchmod,
- * callers can override MZIP_FCHMOD. */
-#define MZIP_FCHMOD(fd, mode) (0)
+ * callers can override OTEZIP_FCHMOD. */
+#define OTEZIP_FCHMOD(fd, mode) (0)
 #endif
 #ifndef S_ISLNK
 #define S_ISLNK(mode) 0
 #endif
 #else
-#define MZIP_MKDIR(path, mode) mkdir((path),(mode))
-#define MZIP_LSTAT(path, buf) lstat((path),(buf))
-#define MZIP_FCHMOD(fd, mode) fchmod((fd),(mode))
+#define OTEZIP_MKDIR(path, mode) mkdir((path),(mode))
+#define OTEZIP_LSTAT(path, buf) lstat((path),(buf))
+#define OTEZIP_FCHMOD(fd, mode) fchmod((fd),(mode))
 #endif
 
 static void usage(void) {
@@ -66,25 +66,25 @@ static void usage(void) {
 	"Options:");
 
 	/* Show compression options based on what's enabled in config */
-#ifdef MZIP_ENABLE_STORE
+#ifdef OTEZIP_ENABLE_STORE
 	puts ("  -z0  Store files without compression");
 #endif
-#ifdef MZIP_ENABLE_DEFLATE
+#ifdef OTEZIP_ENABLE_DEFLATE
 	puts ("  -z1  Use deflate compression (default)");
 #endif
-#ifdef MZIP_ENABLE_ZSTD
+#ifdef OTEZIP_ENABLE_ZSTD
 	puts ("  -z2  Use zstd compression");
 #endif
-#ifdef MZIP_ENABLE_LZMA
+#ifdef OTEZIP_ENABLE_LZMA
 	puts ("  -z3  Use LZMA compression");
 #endif
-#ifdef MZIP_ENABLE_LZ4
+#ifdef OTEZIP_ENABLE_LZ4
 	puts ("  -z4  Use LZ4 compression");
 #endif
-#ifdef MZIP_ENABLE_BROTLI
+#ifdef OTEZIP_ENABLE_BROTLI
 	puts ("  -z5  Use Brotli compression");
 #endif
-#ifdef MZIP_ENABLE_LZFSE
+#ifdef OTEZIP_ENABLE_LZFSE
 	puts ("  -z6  Use LZFSE compression");
 #endif
 	puts ("  -P<policy>, --policy=<policy>  Extraction policy for suspicious entries\n"
@@ -107,7 +107,7 @@ static int list_files(const char *path) {
 	for (zip_uint64_t i = 0; i < n; ++i) {
 		const char *name = NULL; /* we only have names in directory entries */
 		/* mzip stores names inside entries array – expose via zip_name_locate */
-		name = ((struct mzip_entry *)za->entries)[i].name; /* hack – internal */
+		name = ((struct otezip_entry *)za->entries)[i].name; /* hack – internal */
 		printf ("%3llu  %s\n", (unsigned long long)i, name? name: "<unknown>");
 	}
 
@@ -130,7 +130,7 @@ static int create_or_add_files(const char *path, char **files, int num_files, in
 	/* Modify next entry to add to use specified compression method */
 	if (compression_method != 0) {
 		/* For this mzip structure, store the compression method in the mzip_archive */
-		((struct mzip_archive *)za)->default_method = compression_method;
+		((struct otezip_archive *)za)->default_method = compression_method;
 	}
 
 	for (int i = 0; i < num_files; i++) {
@@ -321,7 +321,7 @@ static int ensure_parent_dirs(const char *path) {
 		if (tmp[i] == '/') {
 			tmp[i] = '\0';
 			struct stat st;
-			if (MZIP_LSTAT (tmp, &st) == 0) {
+			if (OTEZIP_LSTAT (tmp, &st) == 0) {
 				/* If the path exists, reject symlinks when policy says so */
 				if (S_ISLNK (st.st_mode)) {
 					if (g_extract_policy == POLICY_REJECT) {
@@ -338,10 +338,10 @@ static int ensure_parent_dirs(const char *path) {
 				if (errno == ENOENT) {
 					/* Try to create directory. If another thread/process created it
 					 * concurrently, handle EEXIST by re-checking via lstat to avoid TOCTOU. */
-					if (MZIP_MKDIR (tmp, 0755) != 0) {
+					if (OTEZIP_MKDIR (tmp, 0755) != 0) {
 						if (errno == EEXIST) {
 							/* Re-check what exists */
-							if (MZIP_LSTAT (tmp, &st) != 0) {
+							if (OTEZIP_LSTAT (tmp, &st) != 0) {
 								tmp[i] = '/';
 								return -1;
 							}
@@ -387,7 +387,7 @@ static int extract_all(const char *path) {
 			continue;
 		}
 
-		const char *raw_name = ((struct mzip_entry *)za->entries)[i].name; /* internal */
+		const char *raw_name = ((struct otezip_entry *)za->entries)[i].name; /* internal */
 		char fname_sanitized[PATH_MAX];
 		if (sanitize_extract_path (raw_name, fname_sanitized, sizeof (fname_sanitized)) != 0) {
 			fprintf (stderr, "Skipping suspicious entry: %s\n", raw_name? raw_name: "(null)");
@@ -401,7 +401,7 @@ static int extract_all(const char *path) {
 			if (ensure_parent_dirs (fname_sanitized) != 0) {
 				fprintf (stderr, "Failed to create directory for %s\n", fname_sanitized);
 			} else {
-				if (MZIP_MKDIR (fname_sanitized, 0755) != 0 && errno != EEXIST) {
+				if (OTEZIP_MKDIR (fname_sanitized, 0755) != 0 && errno != EEXIST) {
 					fprintf (stderr, "Failed to create directory %s\n", fname_sanitized);
 				}
 			}
@@ -417,7 +417,7 @@ static int extract_all(const char *path) {
 
 		/* Avoid overwriting existing files unless force (-f) is specified. */
 		struct stat pst;
-		if (MZIP_LSTAT (fname_sanitized, &pst) == 0) {
+		if (OTEZIP_LSTAT (fname_sanitized, &pst) == 0) {
 			if (!g_force) {
 				fprintf (stderr, "Skipping existing file (use -f to overwrite): %s\n", fname_sanitized);
 				zip_fclose (zf);
@@ -435,7 +435,7 @@ static int extract_all(const char *path) {
 		 * Mask to 0777 to avoid applying SUID/SGID/sticky from archive. */
 		uint32_t external_attr = 0;
 		/* access internal entry data safely */
-		struct mzip_entry *entry = &((struct mzip_entry *)za->entries)[i];
+		struct otezip_entry *entry = &((struct otezip_entry *)za->entries)[i];
 		external_attr = entry->external_attr;
 		mode_t desired_mode = (mode_t) ((external_attr >> 16) & 0777);
 		if (desired_mode == 0) {
@@ -457,7 +457,7 @@ static int extract_all(const char *path) {
 					continue;
 				}
 				/* Force path: open for write/truncate but ensure it's not a symlink */
-				if (MZIP_LSTAT (fname_sanitized, &pst) == 0 && S_ISLNK (pst.st_mode) && g_extract_policy == POLICY_REJECT) {
+				if (OTEZIP_LSTAT (fname_sanitized, &pst) == 0 && S_ISLNK (pst.st_mode) && g_extract_policy == POLICY_REJECT) {
 					fprintf (stderr, "Refusing to overwrite symlink: %s\n", fname_sanitized);
 					zip_fclose (zf);
 					continue;
@@ -491,7 +491,7 @@ static int extract_all(const char *path) {
 		}
 
 		/* Apply safe permissions (masking out SUID/SGID/sticky by using 0777 mask) */
-		if (MZIP_FCHMOD (fd, desired_mode & 0777) != 0) {
+		if (OTEZIP_FCHMOD (fd, desired_mode & 0777) != 0) {
 			/* Non-fatal: warn but continue */
 			fprintf (stderr, "Warning: failed to set permissions on %s: %s\n", fname_sanitized, strerror (errno));
 		}
@@ -535,7 +535,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (strcmp (argv[1], "-v") == 0) {
-		printf ("mzip version %s\n", MZIP_VERSION);
+		printf ("mzip version %s\n", OTEZIP_VERSION);
 		return 0;
 	}
 
@@ -554,8 +554,8 @@ int main(int argc, char **argv) {
 
 	/* Set default compression method based on available algorithms */
 	int compression_method = 0; /* Default to store */
-#ifdef MZIP_ENABLE_DEFLATE
-	compression_method = MZIP_METHOD_DEFLATE; /* Default to deflate if available */
+#ifdef OTEZIP_ENABLE_DEFLATE
+	compression_method = OTEZIP_METHOD_DEFLATE; /* Default to deflate if available */
 #endif
 
 	if (strcmp (argv[1], "-l") == 0) {
@@ -567,7 +567,7 @@ int main(int argc, char **argv) {
 	} else if (strcmp (argv[1], "-a") == 0) {
 		mode_append = 1;
 	} else if (strcmp (argv[1], "-v") == 0) {
-		printf ("mzip version %s\n", MZIP_VERSION);
+		printf ("mzip version %s\n", OTEZIP_VERSION);
 		return 0;
 	} else {
 		usage ();
@@ -597,39 +597,39 @@ int main(int argc, char **argv) {
 
 	/* Find compression options */
 	for (i = 3; i < argc; i++) {
-#ifdef MZIP_ENABLE_STORE
+#ifdef OTEZIP_ENABLE_STORE
 		if (strcmp (argv[i], "-z0") == 0) {
-			compression_method = MZIP_METHOD_STORE; /* Store - no compression */
+			compression_method = OTEZIP_METHOD_STORE; /* Store - no compression */
 		}
 #endif
-#ifdef MZIP_ENABLE_DEFLATE
+#ifdef OTEZIP_ENABLE_DEFLATE
 		else if (strcmp (argv[i], "-z1") == 0) {
-			compression_method = MZIP_METHOD_DEFLATE; /* Deflate */
+			compression_method = OTEZIP_METHOD_DEFLATE; /* Deflate */
 		}
 #endif
-#ifdef MZIP_ENABLE_ZSTD
+#ifdef OTEZIP_ENABLE_ZSTD
 		else if (strcmp (argv[i], "-z2") == 0) {
-			compression_method = MZIP_METHOD_ZSTD; /* Zstd */
+			compression_method = OTEZIP_METHOD_ZSTD; /* Zstd */
 		}
 #endif
-#ifdef MZIP_ENABLE_LZMA
+#ifdef OTEZIP_ENABLE_LZMA
 		else if (strcmp (argv[i], "-z3") == 0) {
-			compression_method = MZIP_METHOD_LZMA; /* LZMA */
+			compression_method = OTEZIP_METHOD_LZMA; /* LZMA */
 		}
 #endif
-#ifdef MZIP_ENABLE_LZ4
+#ifdef OTEZIP_ENABLE_LZ4
 		else if (strcmp (argv[i], "-z4") == 0) {
-			compression_method = MZIP_METHOD_LZ4; /* LZ4 */
+			compression_method = OTEZIP_METHOD_LZ4; /* LZ4 */
 		}
 #endif
-#ifdef MZIP_ENABLE_BROTLI
+#ifdef OTEZIP_ENABLE_BROTLI
 		else if (strcmp (argv[i], "-z5") == 0) {
-			compression_method = MZIP_METHOD_BROTLI; /* Brotli */
+			compression_method = OTEZIP_METHOD_BROTLI; /* Brotli */
 		}
 #endif
-#ifdef MZIP_ENABLE_LZFSE
+#ifdef OTEZIP_ENABLE_LZFSE
 		else if (strcmp (argv[i], "-z6") == 0) {
-			compression_method = MZIP_METHOD_LZFSE; /* LZFSE */
+			compression_method = OTEZIP_METHOD_LZFSE; /* LZFSE */
 		}
 #endif
 	}
@@ -667,7 +667,7 @@ int main(int argc, char **argv) {
 	for (i = 3; i < argc; i++) {
 		if (strcmp (argv[i], "--verify-crc") == 0) {
 			/* enable strict CRC verification in the mzip backend */
-			mzip_verify_crc = 1;
+			otezip_verify_crc = 1;
 		}
 	}
 
@@ -676,7 +676,7 @@ int main(int argc, char **argv) {
 		if (strcmp (argv[i], "--ignore-zipbomb") == 0) {
 			/* explicit, dangerous override: allow archives that claim huge
 			 * uncompressed sizes. This bypasses internal safety checks. */
-			mzip_ignore_zipbomb = 1;
+			otezip_ignore_zipbomb = 1;
 		}
 	}
 

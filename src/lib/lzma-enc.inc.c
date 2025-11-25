@@ -105,7 +105,7 @@ int lzmaCompressInit2_(z_stream *strm, int level, int windowBits,
 #endif
 
 /* ------------- Implementation ------------- */
-#ifdef MZIP_ENABLE_LZMA
+#ifdef OTEZIP_ENABLE_LZMA
 
 /* --- Helper Functions --- */
 

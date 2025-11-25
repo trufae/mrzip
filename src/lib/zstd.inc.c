@@ -156,7 +156,7 @@ int zstdDecompressInit2_(z_stream *strm, int windowBits,
 #endif
 
 /* ------------- Implementation ------------- */
-#ifdef MZIP_ENABLE_ZSTD
+#ifdef OTEZIP_ENABLE_ZSTD
 
 /* --- Helper Functions --- */
 

@@ -68,17 +68,17 @@ jobs:
         run: |
           make clean
           make
-          ls -la mzip
-          ./mzip --help
+          ls -la otezip
+          ./otezip --help
 
       - name: Test meson build (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           meson setup build --backend=ninja
           ninja -C build
-          copy build\mzip.exe mzip.exe
-          dir mzip.exe
-          .\mzip.exe --help
+          copy build\otezip.exe otezip.exe
+          dir otezip.exe
+          .\otezip.exe --help
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -127,7 +127,7 @@ jobs:
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
-          files: mzip${{ matrix.ext }}
-          name: mzip-${{ matrix.name }}${{ matrix.ext }}
+          files: otezip${{ matrix.ext }}
+          name: otezip-${{ matrix.name }}${{ matrix.ext }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

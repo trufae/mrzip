@@ -1,6 +1,6 @@
-# Minimalistic ZIP Implementation (mzip)
+# Minimalistic ZIP Implementation (otezip)
 
-[![CI](https://github.com/trufae/mzip/actions/workflows/ci.yml/badge.svg)](https://github.com/trufae/mzip/actions/workflows/ci.yml)
+[![CI](https://github.com/trufae/otezip/actions/workflows/ci.yml/badge.svg)](https://github.com/trufae/otezip/actions/workflows/ci.yml)
 
 A minimalistic, dependency-free ZIP implementation with support for multiple compression algorithms.
 
@@ -33,7 +33,7 @@ make -C test
 ### Library API
 
 ```c
-#include "mzip.h"
+#include "otezip.h"
 
 // Open ZIP file
 zip_t *za = zip_open("archive.zip", ZIP_RDONLY, &err);
@@ -50,7 +50,7 @@ for (zip_uint64_t i = 0; i < num_files; ++i) {
 zip_t *za_write = zip_open("new.zip", ZIP_CREATE, &err);
 zip_source_t *src = zip_source_buffer(za_write, buffer, size, 1);
 zip_file_add(za_write, "file.txt", src, 0);
-zip_set_file_compression(za_write, index, MZIP_METHOD_ZSTD, 0);
+zip_set_file_compression(za_write, index, OTEZIP_METHOD_ZSTD, 0);
 zip_close(za_write);
 ```
 
@@ -58,16 +58,16 @@ zip_close(za_write);
 
 ```bash
 # List contents
-./mzip -l archive.zip
+./otezip -l archive.zip
 
 # Extract files
-./mzip -x archive.zip
+./otezip -x archive.zip
 
 # Create archive
-./mzip -c archive.zip file1 file2
+./otezip -c archive.zip file1 file2
 
 # Add files
-./mzip -a archive.zip file3
+./otezip -a archive.zip file3
 ```
 
 ## Configuration
@@ -75,11 +75,11 @@ zip_close(za_write);
 Edit `config.h` to enable/disable compression algorithms:
 
 ```c
-#define MZIP_ENABLE_DEFLATE 1
-#define MZIP_ENABLE_ZSTD    1
-#define MZIP_ENABLE_LZMA    1
-#define MZIP_ENABLE_BROTLI  1
-#define MZIP_ENABLE_LZFSE   1
+#define OTEZIP_ENABLE_DEFLATE 1
+#define OTEZIP_ENABLE_ZSTD    1
+#define OTEZIP_ENABLE_LZMA    1
+#define OTEZIP_ENABLE_BROTLI  1
+#define OTEZIP_ENABLE_LZFSE   1
 ```
 
 ## Supported Compression Algorithms

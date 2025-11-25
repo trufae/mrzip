@@ -1,12 +1,12 @@
-/* mzip.c – Minimalistic libzip subset replacement implementation
+/* otezip.c – Minimalistic libzip subset replacement implementation
  * Version: 0.2 (2025-07-27)
  *
- * Implementation file for the mzip library providing a tiny subset of the libzip API.
+ * Implementation file for the otezip library providing a tiny subset of the libzip API.
  *
  * License: MIT / 0-BSD – do whatever you want; attribution appreciated.
  */
 
-#define MZIP_IMPLEMENTATION
+#define OTEZIP_IMPLEMENTATION
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -16,7 +16,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "mzip.h"
+#include "otezip.h"
 #include "../include/zstream.h"
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -24,7 +24,7 @@
 #include <time.h>
 #endif
 
-#if MZIP_ENABLE_LZ4
+#if OTEZIP_ENABLE_LZ4
 #include <r_util.h>
 #endif
 
@@ -35,16 +35,16 @@
 #define MDEFLATE_IMPLEMENTATION
 #include "deflate.inc.c"
 
-#if MZIP_ENABLE_ZSTD
+#if OTEZIP_ENABLE_ZSTD
 #include "zstd.inc.c"
 #endif
-#if MZIP_ENABLE_LZFSE
+#if OTEZIP_ENABLE_LZFSE
 #include "lzfse.inc.c"
 #endif
-#if MZIP_ENABLE_LZMA
+#if OTEZIP_ENABLE_LZMA
 #include "lzma.inc.c"
 #endif
-#if MZIP_ENABLE_BROTLI
+#if OTEZIP_ENABLE_BROTLI
 #include "brotli.inc.c"
 #endif
 
@@ -61,26 +61,26 @@
 #define MZIP_MAX_PAYLOAD (2ULL * 1024ULL * 1024ULL * 1024ULL) /* 2 GiB */
 
 /* Forward declarations of helper functions */
-static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t comp_method,
+static uint32_t otezip_write_local_header(FILE *fp, const char *name, uint32_t comp_method,
 	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32);
-static uint32_t mzip_write_central_header(FILE *fp, const char *name, uint32_t comp_method,
+static uint32_t otezip_write_central_header(FILE *fp, const char *name, uint32_t comp_method,
 	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32,
 	uint32_t local_header_offset, uint16_t file_time, uint16_t file_date, uint32_t external_attr);
-static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
+static void otezip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
 	uint32_t central_dir_size, uint32_t central_dir_offset);
-static int mzip_finalize_archive(zip_t *za);
+static int otezip_finalize_archive(zip_t *za);
 
 /* Global flag: when non-zero, verify CRC32 on extraction and fail on mismatch. */
-int mzip_verify_crc = 0;
+int otezip_verify_crc = 0;
 
 /* Defaults for expansion protection: allow up to 1000x expansion plus 1 MiB slack.
  * These are conservative defaults to prevent OOM from malicious archives while
  * allowing reasonable compression ratios for typical files. The CLI utility
- * can set `mzip_ignore_zipbomb` to bypass these checks when the user explicitly
+ * can set `otezip_ignore_zipbomb` to bypass these checks when the user explicitly
  * requests so (see main.c flag). */
-uint64_t mzip_max_expansion_ratio = 1000ULL;
-uint64_t mzip_max_expansion_slack = 1024ULL * 1024ULL; /* 1 MiB */
-int mzip_ignore_zipbomb = 0;
+uint64_t otezip_max_expansion_ratio = 1000ULL;
+uint64_t otezip_max_expansion_slack = 1024ULL * 1024ULL; /* 1 MiB */
+int otezip_ignore_zipbomb = 0;
 
 /* helper: little-endian readers/writers (ZIP format is little-endian) */
 
@@ -95,7 +95,7 @@ int mzip_ignore_zipbomb = 0;
 /* Provide a small portable wrapper for thread-safe localtime when possible.
  * On POSIX systems prefer `localtime_r`; on Windows or when not available,
  * fall back to `localtime ()` and copy the result into the caller buffer. */
-static struct tm *mzip_localtime_r(const time_t *t, struct tm *out) {
+static struct tm *otezip_localtime_r(const time_t *t, struct tm *out) {
 	/* Portable fallback: use non-reentrant `localtime ()` and copy the result.
 	 * This avoids implicit declaration issues on platforms that don't expose
 	 * `localtime_r` while remaining simple for this small utility. */
@@ -107,13 +107,13 @@ static struct tm *mzip_localtime_r(const time_t *t, struct tm *out) {
 	return out;
 }
 
-static void mzip_get_dostime(uint16_t *dos_time, uint16_t *dos_date) {
+static void otezip_get_dostime(uint16_t *dos_time, uint16_t *dos_date) {
 	time_t now = time (NULL);
 	struct tm tm_buf;
 	struct tm *tm_ptr = NULL;
 
 	/* Prefer reentrant version when available */
-	if (now != (time_t)-1 && mzip_localtime_r (&now, &tm_buf) != NULL) {
+	if (now != (time_t)-1 && otezip_localtime_r (&now, &tm_buf) != NULL) {
 		tm_ptr = &tm_buf;
 	}
 	if (!tm_ptr && now != (time_t)-1) {
@@ -197,18 +197,18 @@ static void mzip_get_dostime(uint16_t *dos_time, uint16_t *dos_date) {
 	*dos_time = (uint16_t) ((hour << 11) | (min << 5) | sec2);
 	*dos_date = (uint16_t) ((year_off << 9) | (mon << 5) | day);
 }
-static uint16_t mzip_rd16(const uint8_t *p) {
+static uint16_t otezip_rd16(const uint8_t *p) {
 	return (uint16_t) (p[0] | (p[1] << 8));
 }
-static uint32_t mzip_rd32(const uint8_t *p) {
+static uint32_t otezip_rd32(const uint8_t *p) {
 	return (uint32_t) (p[0] | (p[1] << 8) |
 		(p[2] << 16) | (p[3] << 24));
 }
-static void mzip_wr16(uint8_t *p, uint16_t v) {
+static void otezip_wr16(uint8_t *p, uint16_t v) {
 	p[0] = (uint8_t) (v & 0xFF);
 	p[1] = (uint8_t) ((v >> 8) & 0xFF);
 }
-static void mzip_wr32(uint8_t *p, uint32_t v) {
+static void otezip_wr32(uint8_t *p, uint32_t v) {
 	p[0] = (uint8_t) (v & 0xFF);
 	p[1] = (uint8_t) ((v >> 8) & 0xFF);
 	p[2] = (uint8_t) ((v >> 16) & 0xFF);
@@ -217,12 +217,12 @@ static void mzip_wr32(uint8_t *p, uint32_t v) {
 
 /* ----  internal helpers  ---- */
 
-static inline int mzip_read_fully(FILE *fp, void *dst, size_t n) {
+static inline int otezip_read_fully(FILE *fp, void *dst, size_t n) {
 	return fread (dst, 1, n, fp) == n? 0: -1;
 }
 
 /* locate EOCD record (last 64KiB + 22 bytes) */
-static long mzip_find_eocd(FILE *fp, uint8_t *eocd_out /*22+*/, size_t *cd_size, uint32_t *cd_ofs, uint16_t *total_entries) {
+static long otezip_find_eocd(FILE *fp, uint8_t *eocd_out /*22+*/, size_t *cd_size, uint32_t *cd_ofs, uint16_t *total_entries) {
 	long file_size;
 	if (fseek (fp, 0, SEEK_END) != 0) {
 		return -1;
@@ -241,19 +241,19 @@ static long mzip_find_eocd(FILE *fp, uint8_t *eocd_out /*22+*/, size_t *cd_size,
 		return -1;
 	}
 	uint8_t buf[65558];
-	if (mzip_read_fully (fp, buf, search_len) != 0) {
+	if (otezip_read_fully (fp, buf, search_len) != 0) {
 		return -1;
 	}
 	size_t i;
 	for (i = search_len - 22; i != (size_t)-1; --i) {
-		if (mzip_rd32 (buf + i) == MZIP_SIG_EOCD) {
+		if (otezip_rd32 (buf + i) == MZIP_SIG_EOCD) {
 			/* Basic EOCD present; extract fields but validate them before
 			 * returning to avoid trusting potentially corrupted archives. */
 			memcpy (eocd_out, buf + i, 22);
-			uint16_t comment_len = mzip_rd16 (buf + i + 20);
-			uint16_t entries = mzip_rd16 (buf + i + 10);
-			uint32_t cd_size_tmp = mzip_rd32 (buf + i + 12);
-			uint32_t cd_ofs_tmp = mzip_rd32 (buf + i + 16);
+			uint16_t comment_len = otezip_rd16 (buf + i + 20);
+			uint16_t entries = otezip_rd16 (buf + i + 10);
+			uint32_t cd_size_tmp = otezip_rd32 (buf + i + 12);
+			uint32_t cd_ofs_tmp = otezip_rd32 (buf + i + 16);
 			(void)comment_len;
 
 			/* Ensure central directory lies within the file. Use 64-bit
@@ -275,14 +275,14 @@ static long mzip_find_eocd(FILE *fp, uint8_t *eocd_out /*22+*/, size_t *cd_size,
 	return -1;
 }
 
-/* parse central directory into array of mzip_entry */
-static int mzip_load_central(zip_t *za) {
+/* parse central directory into array of otezip_entry */
+static int otezip_load_central(zip_t *za) {
 	uint8_t eocd[22];
 	size_t cd_size;
 	uint32_t cd_ofs;
 	uint16_t n_entries;
 
-	if (mzip_find_eocd (za->fp, eocd, &cd_size, &cd_ofs, &n_entries) < 0) {
+	if (otezip_find_eocd (za->fp, eocd, &cd_size, &cd_ofs, &n_entries) < 0) {
 		return -1;
 	}
 
@@ -311,12 +311,12 @@ static int mzip_load_central(zip_t *za) {
 	if (!cd_buf) {
 		return -1;
 	}
-	if (mzip_read_fully (za->fp, cd_buf, cd_size) != 0) {
+	if (otezip_read_fully (za->fp, cd_buf, cd_size) != 0) {
 		free (cd_buf);
 		return -1;
 	}
 
-	za->entries = (struct mzip_entry *)calloc (n_entries, sizeof (struct mzip_entry));
+	za->entries = (struct otezip_entry *)calloc (n_entries, sizeof (struct otezip_entry));
 	za->n_entries = n_entries;
 
 	if (!za->entries) {
@@ -328,7 +328,7 @@ static int mzip_load_central(zip_t *za) {
 	uint16_t i;
 	for (i = 0; i < n_entries; i++) {
 		/* Ensure we have at least the fixed-size central header available */
-		if (off + 46 > cd_size || mzip_rd32 (cd_buf + off) != MZIP_SIG_CDH) {
+		if (off + 46 > cd_size || otezip_rd32 (cd_buf + off) != MZIP_SIG_CDH) {
 			free (cd_buf);
 			return -1; /* malformed */
 		}
@@ -338,28 +338,28 @@ static int mzip_load_central(zip_t *za) {
 		 * bit 3). This project explicitly does not support data descriptors
 		 *(see README). If we encounter them, fail early with a clear
 		 * error instead of continuing in an inconsistent state. */
-		uint16_t gp_flag = mzip_rd16 (h + 8);
+		uint16_t gp_flag = otezip_rd16 (h + 8);
 		if (gp_flag & 0x0008) {
 			fprintf (stderr, "mzip: data descriptors (general purpose flag bit 3) not supported\n");
 			free (cd_buf);
 			return -1;
 		}
 
-		uint16_t filename_len = mzip_rd16 (h + 28);
-		uint16_t extra_len = mzip_rd16 (h + 30);
-		uint16_t comment_len = mzip_rd16 (h + 32);
+		uint16_t filename_len = otezip_rd16 (h + 28);
+		uint16_t extra_len = otezip_rd16 (h + 30);
+		uint16_t comment_len = otezip_rd16 (h + 32);
 
 		/* Field lengths are 16-bit per spec; further validation occurs when
 		 * advancing offsets and allocating memory below. */
 
-		struct mzip_entry *e = &za->entries[i];
-		e->method = mzip_rd16 (h + 10);
-		e->file_time = mzip_rd16 (h + 12);
-		e->file_date = mzip_rd16 (h + 14);
-		e->crc32 = mzip_rd32 (h + 16);
-		e->comp_size = mzip_rd32 (h + 20);
-		e->uncomp_size = mzip_rd32 (h + 24);
-		e->local_hdr_ofs = mzip_rd32 (h + 42);
+		struct otezip_entry *e = &za->entries[i];
+		e->method = otezip_rd16 (h + 10);
+		e->file_time = otezip_rd16 (h + 12);
+		e->file_date = otezip_rd16 (h + 14);
+		e->crc32 = otezip_rd32 (h + 16);
+		e->comp_size = otezip_rd32 (h + 20);
+		e->uncomp_size = otezip_rd32 (h + 24);
+		e->local_hdr_ofs = otezip_rd32 (h + 42);
 
 		/* Reject entries with absurdly large sizes to avoid allocating
 		 * more than our allowed maximum. */
@@ -367,7 +367,7 @@ static int mzip_load_central(zip_t *za) {
 			free (cd_buf);
 			return -1;
 		}
-		e->external_attr = mzip_rd32 (h + 38);
+		e->external_attr = otezip_rd32 (h + 38);
 
 		e->name = (char *)malloc (filename_len + 1u);
 		if (!e->name) {
@@ -396,7 +396,7 @@ static int mzip_load_central(zip_t *za) {
 }
 
 /* load entire (uncompressed) file into memory and hand ownership to caller */
-static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf, uint32_t *out_sz) {
+static int otezip_extract_entry(zip_t *za, struct otezip_entry *e, uint8_t **out_buf, uint32_t *out_sz) {
 	/* move to local header */
 	/* Validate local header offset against file size to avoid seeking
 	 * outside the file. Use 64-bit math for safety. */
@@ -415,10 +415,10 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		return -1;
 	}
 	uint8_t lfh[30];
-	if (mzip_read_fully (za->fp, lfh, 30) != 0) {
+	if (otezip_read_fully (za->fp, lfh, 30) != 0) {
 		return -1;
 	}
-	if (mzip_rd32 (lfh) != MZIP_SIG_LFH) {
+	if (otezip_rd32 (lfh) != MZIP_SIG_LFH) {
 		return -1;
 	}
 
@@ -426,13 +426,13 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 	 *(bit 3). The library does not support deferred CRC/size via
 	 * data descriptors. Fail with a descriptive error to avoid entering
 	 * an inconsistent state. */
-	uint16_t lfh_gp = mzip_rd16 (lfh + 6);
+	uint16_t lfh_gp = otezip_rd16 (lfh + 6);
 	if (lfh_gp & 0x0008) {
 		fprintf (stderr, "mzip: data descriptors (general purpose flag bit 3) not supported\n");
 		return -1;
 	}
-	uint16_t fn_len = mzip_rd16 (lfh + 26);
-	uint16_t extra_len = mzip_rd16 (lfh + 28);
+	uint16_t fn_len = otezip_rd16 (lfh + 26);
+	uint16_t extra_len = otezip_rd16 (lfh + 28);
 
 	/* Filename/extra lengths are 16-bit per spec. Further bounds checks
 	 * are performed for file offsets and allocations below. */
@@ -453,12 +453,12 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 	/* Protect against zipbombs: require that expected uncompressed size from
 	 * the central directory is within a reasonable bound relative to the
 	 * compressed size. If the entry claims a huge expansion, fail unless the
-	 * global `mzip_ignore_zipbomb` flag is set by the caller (CLI override).
+	 * global `otezip_ignore_zipbomb` flag is set by the caller (CLI override).
 	 * We compute allowed = comp_size * ratio + slack and compare against the
 	 * declared uncompressed size. Use 64-bit math to avoid overflow. */
-	if (!mzip_ignore_zipbomb && e->comp_size > 0) {
-		uint64_t allowed = (uint64_t)e->comp_size * mzip_max_expansion_ratio;
-		allowed += mzip_max_expansion_slack;
+	if (!otezip_ignore_zipbomb && e->comp_size > 0) {
+		uint64_t allowed = (uint64_t)e->comp_size * otezip_max_expansion_ratio;
+		allowed += otezip_max_expansion_slack;
 		if ((uint64_t)e->uncomp_size > allowed) {
 			/* suspiciously large uncompressed size */
 			fprintf (stderr, "mzip: entry '%s' claims huge uncompressed size (%u), rejecting to avoid zipbomb\n",
@@ -477,19 +477,19 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 	if (!cbuf) {
 		return -1;
 	}
-	if (e->comp_size && mzip_read_fully (za->fp, cbuf, e->comp_size) != 0) {
+	if (e->comp_size && otezip_read_fully (za->fp, cbuf, e->comp_size) != 0) {
 		free (cbuf);
 		return -1;
 	}
 
 	uint8_t *ubuf;
-#ifdef MZIP_ENABLE_STORE
-	if (e->method == MZIP_METHOD_STORE) { /* stored – nothing to inflate */
+#ifdef OTEZIP_ENABLE_STORE
+	if (e->method == OTEZIP_METHOD_STORE) { /* stored – nothing to inflate */
 		ubuf = cbuf;
 	}
 #endif
-#ifdef MZIP_ENABLE_DEFLATE
-	else if (e->method == MZIP_METHOD_DEFLATE) { /* deflate */
+#ifdef OTEZIP_ENABLE_DEFLATE
+	else if (e->method == OTEZIP_METHOD_DEFLATE) { /* deflate */
 
 		/* Allocate output buffer */
 		ubuf = (uint8_t *)malloc (e->uncomp_size);
@@ -533,8 +533,8 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		free (cbuf);
 	}
 #endif
-#ifdef MZIP_ENABLE_ZSTD
-	else if (e->method == MZIP_METHOD_ZSTD) { /* zstd */
+#ifdef OTEZIP_ENABLE_ZSTD
+	else if (e->method == OTEZIP_METHOD_ZSTD) { /* zstd */
 		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
@@ -561,8 +561,8 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		free (cbuf);
 	}
 #endif
-#ifdef MZIP_ENABLE_LZFSE
-	else if (e->method == MZIP_METHOD_LZFSE) { /* lzfse */
+#ifdef OTEZIP_ENABLE_LZFSE
+	else if (e->method == OTEZIP_METHOD_LZFSE) { /* lzfse */
 		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
@@ -589,8 +589,8 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		free (cbuf);
 	}
 #endif
-#ifdef MZIP_ENABLE_LZ4
-	else if (e->method == MZIP_METHOD_LZ4) { /* lz4 - using radare2's implementation */
+#ifdef OTEZIP_ENABLE_LZ4
+	else if (e->method == OTEZIP_METHOD_LZ4) { /* lz4 - using radare2's implementation */
 		size_t output_size = 0;
 		ubuf = r_lz4_decompress (cbuf, e->comp_size, &output_size);
 		if (!ubuf || output_size != e->uncomp_size) {
@@ -601,8 +601,8 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		free (cbuf);
 	}
 #endif
-#ifdef MZIP_ENABLE_LZMA
-	else if (e->method == MZIP_METHOD_LZMA) { /* lzma */
+#ifdef OTEZIP_ENABLE_LZMA
+	else if (e->method == OTEZIP_METHOD_LZMA) { /* lzma */
 		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
@@ -629,8 +629,8 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		free (cbuf);
 	}
 #endif
-#ifdef MZIP_ENABLE_BROTLI
-	else if (e->method == MZIP_METHOD_BROTLI) { /* brotli */
+#ifdef OTEZIP_ENABLE_BROTLI
+	else if (e->method == OTEZIP_METHOD_BROTLI) { /* brotli */
 		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
@@ -663,9 +663,9 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 	}
 	/* Verify CRC32 of uncompressed data if requested or warn on mismatch. */
 	{
-		uint32_t computed_crc = mzip_crc32 (0, ubuf, e->uncomp_size);
+		uint32_t computed_crc = otezip_crc32 (0, ubuf, e->uncomp_size);
 		if (computed_crc != e->crc32) {
-			if (mzip_verify_crc) {
+			if (otezip_verify_crc) {
 				/* On strict verify, treat mismatch as fatal for this entry. */
 				free (ubuf);
 				return -1;
@@ -752,7 +752,7 @@ zip_t *zip_open(const char *path, int flags, int *errorp) {
 	za->fp = fp;
 	if (za->mode == 0 || (exists && ! (flags & ZIP_TRUNCATE))) {
 		/* Load central directory for existing archive */
-		if (mzip_load_central (za) != 0) {
+		if (otezip_load_central (za) != 0) {
 			zip_close (za);
 			if (errorp) {
 				*errorp = -1;
@@ -772,12 +772,12 @@ zip_t *zip_open(const char *path, int flags, int *errorp) {
 }
 
 /* Helper function to compress data using various compression methods */
-static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf, uint32_t *out_size, uint16_t *method) {
+static int otezip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf, uint32_t *out_size, uint16_t *method) {
 	*out_buf = NULL;
 	*out_size = 0;
 
-#ifdef MZIP_ENABLE_STORE
-	if (*method == MZIP_METHOD_STORE) {
+#ifdef OTEZIP_ENABLE_STORE
+	if (*method == OTEZIP_METHOD_STORE) {
 		/* Store (no compression) */
 		*out_buf = (uint8_t *)malloc (in_size);
 		if (!*out_buf) {
@@ -789,8 +789,8 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 	}
 #endif
 
-#ifdef MZIP_ENABLE_DEFLATE
-	if (*method == MZIP_METHOD_DEFLATE) {
+#ifdef OTEZIP_ENABLE_DEFLATE
+	if (*method == OTEZIP_METHOD_DEFLATE) {
 		/* Deflate compression */
 		uLong comp_bound = compressBound (in_size);
 		*out_buf = (uint8_t *)malloc (comp_bound);
@@ -821,15 +821,15 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 		/* If compression didn't reduce size, fall back to STORE */
 		if (*out_size >= in_size) {
 			free (*out_buf);
-			*method = MZIP_METHOD_STORE;
-			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+			*method = OTEZIP_METHOD_STORE;
+			return otezip_compress_data (in_buf, in_size, out_buf, out_size, method);
 		}
 		return 0;
 	}
 #endif
 
-#ifdef MZIP_ENABLE_LZ4
-	if (*method == MZIP_METHOD_LZ4) {
+#ifdef OTEZIP_ENABLE_LZ4
+	if (*method == OTEZIP_METHOD_LZ4) {
 		/* LZ4 compression using radare2's implementation */
 		 *out_buf = (uint8_t *)malloc (in_size * 2); /* Worst case scenario */
 		if (!*out_buf) {
@@ -845,18 +845,18 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 		/* If compression didn't reduce size, fall back to STORE */
 		if (*out_size >= in_size) {
 			free (*out_buf);
-			*method = MZIP_METHOD_STORE;
-			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+			*method = OTEZIP_METHOD_STORE;
+			return otezip_compress_data (in_buf, in_size, out_buf, out_size, method);
 		}
 
 		return 0;
 	}
 #endif
-#ifdef MZIP_ENABLE_LZMA
-	if (*method == MZIP_METHOD_LZMA) {
+#ifdef OTEZIP_ENABLE_LZMA
+	if (*method == OTEZIP_METHOD_LZMA) {
 		/* LZMA compression */
 		/* Worst-case bound: input size + header + overhead for incompressible data */
-		size_t out_cap = in_size + MZIP_LZMA_HEADER_SIZE + (in_size / MZIP_LZMA_OVERHEAD_RATIO);
+		size_t out_cap = in_size + OTEZIP_LZMA_HEADER_SIZE + (in_size / OTEZIP_LZMA_OVERHEAD_RATIO);
 		*out_buf = (uint8_t *)malloc (out_cap);
 		if (!*out_buf) {
 			return -1;
@@ -880,8 +880,8 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 			lzmaEnd (&strm);
 			free (*out_buf);
 			*out_buf = NULL;
-			*method = MZIP_METHOD_STORE;
-			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+			*method = OTEZIP_METHOD_STORE;
+			return otezip_compress_data (in_buf, in_size, out_buf, out_size, method);
 		}
 
 		*out_size = strm.total_out;
@@ -890,14 +890,14 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 		/* If compression didn't reduce size, fall back to STORE */
 		if (*out_size >= in_size) {
 			free (*out_buf);
-			*method = MZIP_METHOD_STORE;
-			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+			*method = OTEZIP_METHOD_STORE;
+			return otezip_compress_data (in_buf, in_size, out_buf, out_size, method);
 		}
 		return 0;
 	}
 #endif
-#ifdef MZIP_ENABLE_BROTLI
-	if (*method == MZIP_METHOD_BROTLI) {
+#ifdef OTEZIP_ENABLE_BROTLI
+	if (*method == OTEZIP_METHOD_BROTLI) {
 		/* Brotli compression (using vendored upstream implementation via wrappers) */
 		size_t out_cap = (in_size? (in_size * 2 + 64): 128);
 		*out_buf = (uint8_t *)malloc (out_cap);
@@ -947,8 +947,8 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 		/* For empty inputs, Brotli still emits a minimal frame; keep it. */
 		if (in_size > 0 && *out_size >= in_size) {
 			free (*out_buf);
-			*method = MZIP_METHOD_STORE;
-			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+			*method = OTEZIP_METHOD_STORE;
+			return otezip_compress_data (in_buf, in_size, out_buf, out_size, method);
 		}
 		return 0;
 	}
@@ -965,16 +965,16 @@ zip_int64_t zip_file_add(zip_t *za, const char *name, zip_source_t *src, zip_fla
 		return -1;
 	}
 	/* Allocate a new entry */
-	struct mzip_entry *new_entries;
-	new_entries = realloc (za->entries, (za->n_entries + 1) * sizeof (struct mzip_entry));
+	struct otezip_entry *new_entries;
+	new_entries = realloc (za->entries, (za->n_entries + 1) * sizeof (struct otezip_entry));
 	if (!new_entries) {
 		return -1;
 	}
 	za->entries = new_entries;
 
 	/* Set up the new entry */
-	struct mzip_entry *e = &za->entries[za->n_entries];
-	memset (e, 0, sizeof (struct mzip_entry));
+	struct otezip_entry *e = &za->entries[za->n_entries];
+	memset (e, 0, sizeof (struct otezip_entry));
 
 	/* strdup is POSIX; allocate and copy to be portable and avoid
 	 * implicit declaration warnings. */
@@ -1004,10 +1004,10 @@ zip_int64_t zip_file_add(zip_t *za, const char *name, zip_source_t *src, zip_fla
 	e->uncomp_size = (uint32_t)src->len;
 
 	/* Calculate CRC-32 of the uncompressed data */
-	e->crc32 = mzip_crc32 (0, src->buf, src->len);
+	e->crc32 = otezip_crc32 (0, src->buf, src->len);
 
 	/* Set current time for file timestamp */
-	mzip_get_dostime (&e->file_time, &e->file_date);
+	otezip_get_dostime (&e->file_time, &e->file_date);
 
 	/* Set default permissions: 0644 for files */
 	e->external_attr = 0100644 << 16; /* S_IFREG | 0644 << 16 */
@@ -1031,7 +1031,7 @@ zip_int64_t zip_file_add(zip_t *za, const char *name, zip_source_t *src, zip_fla
 	uint32_t comp_size = 0;
 
 	/* Compress the data using the selected method */
-	if (mzip_compress_data ((uint8_t *)src->buf, src->len, &comp_buf, &comp_size, &e->method) != 0) {
+	if (otezip_compress_data ((uint8_t *)src->buf, src->len, &comp_buf, &comp_size, &e->method) != 0) {
 		free (e->name);
 		return -1;
 	}
@@ -1045,7 +1045,7 @@ zip_int64_t zip_file_add(zip_t *za, const char *name, zip_source_t *src, zip_fla
 	e->comp_size = comp_size;
 
 	/* Write local file header */
-	mzip_write_local_header (za->fp, e->name, e->method, e->comp_size, e->uncomp_size, e->crc32);
+	otezip_write_local_header (za->fp, e->name, e->method, e->comp_size, e->uncomp_size, e->crc32);
 
 	/* Write compressed data */
 	fwrite (comp_buf, 1, comp_size, za->fp);
@@ -1074,38 +1074,38 @@ int zip_set_file_compression(zip_t *za, zip_uint64_t index, zip_int32_t comp, zi
 	}
 
 	/* Check if the requested compression method is supported */
-#ifdef MZIP_ENABLE_STORE
-	if (comp == MZIP_METHOD_STORE) {
+#ifdef OTEZIP_ENABLE_STORE
+	if (comp == OTEZIP_METHOD_STORE) {
 		/* Store is always supported */
 	}
 #endif
-#ifdef MZIP_ENABLE_DEFLATE
-	else if (comp == MZIP_METHOD_DEFLATE) {
+#ifdef OTEZIP_ENABLE_DEFLATE
+	else if (comp == OTEZIP_METHOD_DEFLATE) {
 		/* Deflate is supported */
 	}
 #endif
-#ifdef MZIP_ENABLE_ZSTD
-	else if (comp == MZIP_METHOD_ZSTD) {
+#ifdef OTEZIP_ENABLE_ZSTD
+	else if (comp == OTEZIP_METHOD_ZSTD) {
 		/* Zstd is supported */
 	}
 #endif
-#ifdef MZIP_ENABLE_LZFSE
-	else if (comp == MZIP_METHOD_LZFSE) {
+#ifdef OTEZIP_ENABLE_LZFSE
+	else if (comp == OTEZIP_METHOD_LZFSE) {
 		/* LZFSE is supported */
 	}
 #endif
-#ifdef MZIP_ENABLE_LZ4
-	else if (comp == MZIP_METHOD_LZ4) {
+#ifdef OTEZIP_ENABLE_LZ4
+	else if (comp == OTEZIP_METHOD_LZ4) {
 		/* LZ4 is supported */
 	}
 #endif
-#ifdef MZIP_ENABLE_LZMA
-	else if (comp == MZIP_METHOD_LZMA) {
+#ifdef OTEZIP_ENABLE_LZMA
+	else if (comp == OTEZIP_METHOD_LZMA) {
 		/* LZMA is supported */
 	}
 #endif
-#ifdef MZIP_ENABLE_BROTLI
-	else if (comp == MZIP_METHOD_BROTLI) {
+#ifdef OTEZIP_ENABLE_BROTLI
+	else if (comp == OTEZIP_METHOD_BROTLI) {
 		/* Brotli is supported */
 	}
 #endif
@@ -1120,7 +1120,7 @@ int zip_set_file_compression(zip_t *za, zip_uint64_t index, zip_int32_t comp, zi
 }
 
 /* Finalize ZIP file before closing - write central directory */
-static int mzip_finalize_archive(zip_t *za) {
+static int otezip_finalize_archive(zip_t *za) {
 	if (!za || !za->fp || za->mode != 1) {
 		return -1;
 	}
@@ -1134,8 +1134,8 @@ static int mzip_finalize_archive(zip_t *za) {
 	 * writing them. */
 	uint64_t cd_size_acc = 0;
 	for (zip_uint64_t i = 0; i < za->n_entries; i++) {
-		struct mzip_entry *e = &za->entries[i];
-		uint32_t written = mzip_write_central_header (za->fp, e->name, e->method,
+		struct otezip_entry *e = &za->entries[i];
+		uint32_t written = otezip_write_central_header (za->fp, e->name, e->method,
 			e->comp_size, e->uncomp_size, e->crc32,
 			e->local_hdr_ofs, e->file_time, e->file_date, e->external_attr);
 		cd_size_acc += written;
@@ -1151,7 +1151,7 @@ static int mzip_finalize_archive(zip_t *za) {
 	}
 
 	/* Write end of central directory record */
-	mzip_write_end_of_central_directory (za->fp, (uint32_t)za->n_entries,
+	otezip_write_end_of_central_directory (za->fp, (uint32_t)za->n_entries,
 		(uint32_t)cd_size_acc, (uint32_t)cd_offset);
 	return 0;
 }
@@ -1162,7 +1162,7 @@ int zip_close(zip_t *za) {
 	}
 	/* Finalize archive if in write mode */
 	if (za->mode == 1) {
-		mzip_finalize_archive (za);
+		otezip_finalize_archive (za);
 	}
 
 	if (za->fp) {
@@ -1204,7 +1204,7 @@ zip_file_t *zip_fopen_index(zip_t *za, zip_uint64_t index, zip_flags_t flags) {
 	}
 	uint8_t *buf = NULL;
 	uint32_t sz = 0;
-	if (mzip_extract_entry (za, &za->entries[index], &buf, &sz) != 0) {
+	if (otezip_extract_entry (za, &za->entries[index], &buf, &sz) != 0) {
 		return NULL;
 	}
 	zip_file_t *zf = (zip_file_t *)malloc (sizeof (zip_file_t));
@@ -1227,7 +1227,7 @@ int zip_fclose(zip_file_t *zf) {
 }
 
 /* Helper function to write local file header */
-static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t comp_method,
+static uint32_t otezip_write_local_header(FILE *fp, const char *name, uint32_t comp_method,
 	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32) {
 	size_t filename_len_sz = strlen (name);
 	if (filename_len_sz > MZIP_MAX_FIELD_LEN) {
@@ -1237,37 +1237,37 @@ static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t com
 	uint8_t header[30];
 
 	/* Write local file header signature */
-	mzip_wr32 (header, MZIP_SIG_LFH);
+	otezip_wr32 (header, MZIP_SIG_LFH);
 
 	/* Version needed to extract (2.0) */
-	mzip_wr16 (header + 4, 20);
+	otezip_wr16 (header + 4, 20);
 
 	/* General purpose bit flag */
-	mzip_wr16 (header + 6, 0);
+	otezip_wr16 (header + 6, 0);
 
 	/* Compression method */
-	mzip_wr16 (header + 8, comp_method);
+	otezip_wr16 (header + 8, comp_method);
 
 	/* Last mod file time & date */
 	uint16_t file_time, file_date;
-	mzip_get_dostime (&file_time, &file_date);
-	mzip_wr16 (header + 10, file_time);
-	mzip_wr16 (header + 12, file_date);
+	otezip_get_dostime (&file_time, &file_date);
+	otezip_wr16 (header + 10, file_time);
+	otezip_wr16 (header + 12, file_date);
 
 	/* CRC-32 */
-	mzip_wr32 (header + 14, crc32);
+	otezip_wr32 (header + 14, crc32);
 
 	/* Compressed size */
-	mzip_wr32 (header + 18, comp_size);
+	otezip_wr32 (header + 18, comp_size);
 
 	/* Uncompressed size */
-	mzip_wr32 (header + 22, uncomp_size);
+	otezip_wr32 (header + 22, uncomp_size);
 
 	/* File name length */
-	mzip_wr16 (header + 26, filename_len);
+	otezip_wr16 (header + 26, filename_len);
 
 	/* Extra field length */
-	mzip_wr16 (header + 28, 0);
+	otezip_wr16 (header + 28, 0);
 
 	/* Write header */
 	fwrite (header, 1, sizeof (header), fp);
@@ -1279,7 +1279,7 @@ static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t com
 }
 
 /* Helper function to write central directory header */
-static uint32_t mzip_write_central_header(FILE *fp, const char *name, uint32_t comp_method,
+static uint32_t otezip_write_central_header(FILE *fp, const char *name, uint32_t comp_method,
 	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32,
 	uint32_t local_header_offset, uint16_t file_time, uint16_t file_date, uint32_t external_attr) {
 	size_t filename_len_sz = strlen (name);
@@ -1290,53 +1290,53 @@ static uint32_t mzip_write_central_header(FILE *fp, const char *name, uint32_t c
 	uint8_t header[46];
 
 	/* Central directory file header signature */
-	mzip_wr32 (header, MZIP_SIG_CDH);
+	otezip_wr32 (header, MZIP_SIG_CDH);
 
 	/* Version made by (UNIX, version 2.0) */
-	mzip_wr16 (header + 4, 0x031e);
+	otezip_wr16 (header + 4, 0x031e);
 
 	/* Version needed to extract (2.0) */
-	mzip_wr16 (header + 6, 20);
+	otezip_wr16 (header + 6, 20);
 
 	/* General purpose bit flag */
-	mzip_wr16 (header + 8, 0);
+	otezip_wr16 (header + 8, 0);
 
 	/* Compression method */
-	mzip_wr16 (header + 10, comp_method);
+	otezip_wr16 (header + 10, comp_method);
 
 	/* Last mod file time & date */
-	mzip_wr16 (header + 12, file_time);
-	mzip_wr16 (header + 14, file_date);
+	otezip_wr16 (header + 12, file_time);
+	otezip_wr16 (header + 14, file_date);
 
 	/* CRC-32 */
-	mzip_wr32 (header + 16, crc32);
+	otezip_wr32 (header + 16, crc32);
 
 	/* Compressed size */
-	mzip_wr32 (header + 20, comp_size);
+	otezip_wr32 (header + 20, comp_size);
 
 	/* Uncompressed size */
-	mzip_wr32 (header + 24, uncomp_size);
+	otezip_wr32 (header + 24, uncomp_size);
 
 	/* File name length */
-	mzip_wr16 (header + 28, filename_len);
+	otezip_wr16 (header + 28, filename_len);
 
 	/* Extra field length */
-	mzip_wr16 (header + 30, 0);
+	otezip_wr16 (header + 30, 0);
 
 	/* File comment length */
-	mzip_wr16 (header + 32, 0);
+	otezip_wr16 (header + 32, 0);
 
 	/* Disk number start */
-	mzip_wr16 (header + 34, 0);
+	otezip_wr16 (header + 34, 0);
 
 	/* Internal file attributes */
-	mzip_wr16 (header + 36, 0);
+	otezip_wr16 (header + 36, 0);
 
 	/* External file attributes */
-	mzip_wr32 (header + 38, external_attr);
+	otezip_wr32 (header + 38, external_attr);
 
 	/* Relative offset of local header */
-	mzip_wr32 (header + 42, local_header_offset);
+	otezip_wr32 (header + 42, local_header_offset);
 
 	/* Write header */
 	fwrite (header, 1, sizeof (header), fp);
@@ -1348,33 +1348,33 @@ static uint32_t mzip_write_central_header(FILE *fp, const char *name, uint32_t c
 }
 
 /* Helper function to write end of central directory record */
-static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
+static void otezip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
 	uint32_t central_dir_size, uint32_t central_dir_offset) {
 	uint8_t eocd[22];
 
 	/* End of central directory signature */
-	mzip_wr32 (eocd, MZIP_SIG_EOCD);
+	otezip_wr32 (eocd, MZIP_SIG_EOCD);
 
 	/* Number of this disk */
-	mzip_wr16 (eocd + 4, 0);
+	otezip_wr16 (eocd + 4, 0);
 
 	/* Number of the disk with the start of the central directory */
-	mzip_wr16 (eocd + 6, 0);
+	otezip_wr16 (eocd + 6, 0);
 
 	/* Total number of entries in the central directory on this disk */
-	mzip_wr16 (eocd + 8, num_entries);
+	otezip_wr16 (eocd + 8, num_entries);
 
 	/* Total number of entries in the central directory */
-	mzip_wr16 (eocd + 10, num_entries);
+	otezip_wr16 (eocd + 10, num_entries);
 
 	/* Size of the central directory */
-	mzip_wr32 (eocd + 12, central_dir_size);
+	otezip_wr32 (eocd + 12, central_dir_size);
 
 	/* Offset of start of central directory with respect to the starting disk number */
-	mzip_wr32 (eocd + 16, central_dir_offset);
+	otezip_wr32 (eocd + 16, central_dir_offset);
 
 	/* .ZIP file comment length */
-	mzip_wr16 (eocd + 20, 0);
+	otezip_wr16 (eocd + 20, 0);
 
 	/* Write end of central directory record */
 	fwrite (eocd, 1, sizeof (eocd), fp);
