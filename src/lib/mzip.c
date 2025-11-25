@@ -13,7 +13,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
-#include <string.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -115,7 +114,7 @@ static void mzip_get_dostime(uint16_t *dos_time, uint16_t *dos_date) {
     if (now != (time_t)-1 && mzip_localtime_r(&now, &tm_buf) != NULL) {
         tm_ptr = &tm_buf;
     }
-    if (!tm_ptr) {
+    if (!tm_ptr && now != (time_t)-1) {
         struct tm *tmp = localtime(&now);
         if (tmp) {
             /* copy into stack buffer to have a consistent pointer */
