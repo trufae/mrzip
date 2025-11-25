@@ -71,10 +71,10 @@ test_unzip() {
 
 test_zip() {
      init
-     echo "[***] Testing otezip $1 (0 = store, 1 = deflate, 3 = lzma, 5 = brotli, 93 = zstd, 100 = lzfse)"
-    echo "Creating test.zip with otezip -c test.zip hello.txt world.txt -z$1"
+     echo "[***] Testing otezip $1"
+    echo "Creating test.zip with otezip -c test.zip hello.txt world.txt -z $1"
     # Use the compression method specified by the parameter
-    $MZ -c test.zip hello.txt world.txt -z$1
+    $MZ -c test.zip hello.txt world.txt -z $1
     echo "Archive contents:"
     xxd -g 1 test.zip | head -n 20
     unzip -l test.zip > files.txt
@@ -174,7 +174,7 @@ test_unzip_lzma() {
 	init
 	echo "[***] Testing otezip decompression with LZMA"
 	# Create an LZMA-compressed zip file
-	$MZ -c test.zip hello.txt world.txt -z3
+	$MZ -c test.zip hello.txt world.txt -z lzma
 	echo "Created zip file with LZMA method"
 	file test.zip
 	xxd -g 1 test.zip | head -20
@@ -224,12 +224,12 @@ test_unzip "deflate" || exit 1
 test_unzip_lzma || exit 1
 test_lzma_7z || exit 1
 
-MODE="store"; test_zip "0" || exit 1
-MODE="deflate"; test_zip "1" || exit 1
-MODE="lzma"; test_zip "3" || exit 1
-MODE="brotli"; test_zip "5" || exit 1
-MODE="zstd"; test_zip "93" || exit 1
-MODE="lzfse"; test_zip "100" || exit 1
+MODE="store"; test_zip "store" || exit 1
+MODE="deflate"; test_zip "deflate" || exit 1
+MODE="lzma"; test_zip "lzma" || exit 1
+MODE="brotli"; test_zip "brotli" || exit 1
+MODE="zstd"; test_zip "zstd" || exit 1
+MODE="lzfse"; test_zip "lzfse" || exit 1
 
 # Additional corner-case tests
 
@@ -237,15 +237,15 @@ test_empty_files() {
      init
      echo "[***] Testing empty files with store/deflate/lzma/brotli/zstd/lzfse"
      : > empty.txt
-     for Z in 0 1 3 5 93 100; do
+     for Z in store deflate lzma brotli zstd lzfse; do
         rm -f test.zip
-        $MZ -c test.zip empty.txt -z$Z || error "otezip failed for -z$Z"
+        $MZ -c test.zip empty.txt -z $Z || error "otezip failed for -z $Z"
         unzip -l test.zip > files.txt || error "unzip -l failed"
-        grep "empty.txt" files.txt >/dev/null || error "empty.txt missing (-z$Z)"
+        grep "empty.txt" files.txt >/dev/null || error "empty.txt missing (-z $Z)"
         mkdir -p data && cd data
-        $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
-        [ -f empty.txt ] || error "empty.txt not extracted (-z$Z)"
-        cmp -s empty.txt ../empty.txt || error "empty.txt mismatch (-z$Z)"
+        $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z $Z)"
+        [ -f empty.txt ] || error "empty.txt not extracted (-z $Z)"
+        cmp -s empty.txt ../empty.txt || error "empty.txt mismatch (-z $Z)"
         cd .. && rm -rf data
     done
     fini
@@ -257,14 +257,14 @@ test_binary_file() {
     # create 256-byte binary with values 0..255
     i=0; : > bin.dat
     while [ $i -lt 256 ]; do printf "\\$(printf '%03o' $i)" >> bin.dat; i=$((i+1)); done
-     for Z in 0 1 3 5 93 100; do
+     for Z in store deflate lzma brotli zstd lzfse; do
         rm -f test.zip
-        $MZ -c test.zip bin.dat -z$Z || error "otezip failed for -z$Z"
+        $MZ -c test.zip bin.dat -z $Z || error "otezip failed for -z $Z"
         unzip -l test.zip > files.txt || error "unzip -l failed"
-        grep "bin.dat" files.txt >/dev/null || error "bin.dat missing (-z$Z)"
+        grep "bin.dat" files.txt >/dev/null || error "bin.dat missing (-z $Z)"
         mkdir -p data && cd data
-        $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
-        cmp -s bin.dat ../bin.dat || error "binary mismatch (-z$Z)"
+        $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z $Z)"
+        cmp -s bin.dat ../bin.dat || error "binary mismatch (-z $Z)"
         cd .. && rm -rf data
     done
     fini
@@ -274,7 +274,7 @@ test_large_random_and_fallback() {
     init
     echo "[***] Testing random data with LZMA (validate robust handling)"
     dd if=/dev/urandom of=rand.bin bs=1k count=4 2>/dev/null || error "cannot create random"
-    $MZ -c test.zip rand.bin -z3 || error "otezip failed -z3"
+    $MZ -c test.zip rand.bin -z lzma || error "otezip failed -z lzma"
     # Validate archive and extraction
     unzip -l test.zip > files.txt || error "unzip -l failed"
     grep "rand.bin" files.txt >/dev/null || error "rand.bin missing"
@@ -292,7 +292,7 @@ test_duplicate_names_listing() {
     echo one > a/dup.txt
     echo two > b/dup.txt
     # Add both; tool stores base names, creating two entries with same name
-    $MZ -c test.zip a/dup.txt b/dup.txt -z1 || error "otezip failed"
+    $MZ -c test.zip a/dup.txt b/dup.txt -z deflate || error "otezip failed"
     out=$($MZ -l test.zip)
     echo "$out"
     cnt=$(printf "%s" "$out" | grep -c "dup.txt")
@@ -304,13 +304,13 @@ test_space_in_name() {
      init
      echo "[***] Testing filename with spaces"
      printf "spaced content\n" > "space name.txt"
-      for Z in 0 1 3 5 93 100; do
+      for Z in store deflate lzma brotli zstd lzfse; do
          rm -f test.zip
-         $MZ -c test.zip "space name.txt" -z$Z || error "otezip failed for -z$Z"
-         $MZ -l test.zip | grep "space name.txt" >/dev/null || error "missing spaced name (-z$Z)"
+         $MZ -c test.zip "space name.txt" -z $Z || error "otezip failed for -z $Z"
+         $MZ -l test.zip | grep "space name.txt" >/dev/null || error "missing spaced name (-z $Z)"
          mkdir -p data && cd data
-         $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
-         diff -u "space name.txt" ../"space name.txt" || error "spaced filename mismatch (-z$Z)"
+         $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z $Z)"
+         diff -u "space name.txt" ../"space name.txt" || error "spaced filename mismatch (-z $Z)"
          cd .. && rm -rf data
      done
      fini
@@ -321,14 +321,14 @@ test_large_file() {
      echo "[***] Testing large file (1MB) with store/deflate/lzma/brotli/zstd/lzfse"
      # Create a 1MB random file
      dd if=/dev/urandom of=large.bin bs=1k count=1024 2>/dev/null || error "cannot create large file"
-     for Z in 0 1 3 5 93 100; do
+     for Z in store deflate lzma brotli zstd lzfse; do
          rm -f test.zip
-         $MZ -c test.zip large.bin -z$Z || error "otezip failed for -z$Z"
+         $MZ -c test.zip large.bin -z $Z || error "otezip failed for -z $Z"
          unzip -l test.zip > files.txt || error "unzip -l failed"
-         grep "large.bin" files.txt >/dev/null || error "large.bin missing (-z$Z)"
+         grep "large.bin" files.txt >/dev/null || error "large.bin missing (-z $Z)"
          mkdir -p data && cd data
-         $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z$Z)"
-         cmp -s large.bin ../large.bin || error "large.bin mismatch (-z$Z)"
+         $MZ -x ../test.zip >/dev/null || error "mzip -x failed (-z $Z)"
+         cmp -s large.bin ../large.bin || error "large.bin mismatch (-z $Z)"
          cd .. && rm -rf data
      done
      fini
@@ -348,11 +348,17 @@ check_valgrind() {
     return 0
 }
 
+if check_valgrind; then
+    HAS_VALGRIND=1
+else
+    HAS_VALGRIND=0
+fi
+
 test_valgrind_extract() {
-    if ! check_valgrind; then return 0; fi
+    if [ "$HAS_VALGRIND" -eq 0 ]; then return 0; fi
     init
     echo "[***] Testing extractions under Valgrind"
-    $MZ -c test.zip hello.txt world.txt -z1
+    $MZ -c test.zip hello.txt world.txt -z deflate
     mkdir data
     cd data
     valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -x ../test.zip || error "Valgrind detected leaks in extraction"
@@ -361,10 +367,10 @@ test_valgrind_extract() {
 }
 
 test_valgrind_corrupted() {
-    if ! check_valgrind; then return 0; fi
+    if [ "$HAS_VALGRIND" -eq 0 ]; then return 0; fi
     init
     echo "[***] Testing corrupted archive under Valgrind"
-    $MZ -c test.zip hello.txt world.txt -z1
+    $MZ -c test.zip hello.txt world.txt -z deflate
     dd if=test.zip of=corrupted.zip bs=1 count=100 2>/dev/null
     mkdir data
     cd data
@@ -374,10 +380,10 @@ test_valgrind_corrupted() {
 }
 
 test_valgrind_cycle() {
-    if ! check_valgrind; then return 0; fi
+    if [ "$HAS_VALGRIND" -eq 0 ]; then return 0; fi
     init
     echo "[***] Testing compression/decompression cycle under Valgrind"
-    valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -c test.zip hello.txt world.txt -z1 || error "Valgrind detected leaks in compression"
+    valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -c test.zip hello.txt world.txt -z deflate || error "Valgrind detected leaks in compression"
     mkdir data
     cd data
     valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -x ../test.zip || error "Valgrind detected leaks in extraction"

@@ -159,6 +159,10 @@ extern uint64_t otezip_max_expansion_ratio;
 extern uint64_t otezip_max_expansion_slack;
 extern int otezip_ignore_zipbomb;
 
+/* Helper function to get compression method ID from string name.
+ * Returns the OTEZIP_METHOD_* value or -1 if invalid/not supported. */
+int otezip_method_from_string(const char *method_name);
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -66,26 +66,27 @@ static void usage(void) {
 	"Options:");
 
 	/* Show compression options based on what's enabled in config */
+	puts ("  -z <method>  Use compression method (default: deflate if available, else store)");
 #ifdef OTEZIP_ENABLE_STORE
-	puts ("  -z0  Store files without compression");
+	puts ("      store     Store files without compression");
 #endif
 #ifdef OTEZIP_ENABLE_DEFLATE
-	puts ("  -z1  Use deflate compression (default)");
+	puts ("      deflate   Use deflate compression");
 #endif
 #ifdef OTEZIP_ENABLE_ZSTD
-	puts ("  -z2  Use zstd compression");
+	puts ("      zstd      Use zstd compression");
 #endif
 #ifdef OTEZIP_ENABLE_LZMA
-	puts ("  -z3  Use LZMA compression");
+	puts ("      lzma      Use LZMA compression");
 #endif
 #ifdef OTEZIP_ENABLE_LZ4
-	puts ("  -z4  Use LZ4 compression");
+	puts ("      lz4       Use LZ4 compression");
 #endif
 #ifdef OTEZIP_ENABLE_BROTLI
-	puts ("  -z5  Use Brotli compression");
+	puts ("      brotli    Use Brotli compression");
 #endif
 #ifdef OTEZIP_ENABLE_LZFSE
-	puts ("  -z6  Use LZFSE compression");
+	puts ("      lzfse     Use LZFSE compression");
 #endif
 	puts ("  -P<policy>, --policy=<policy>  Extraction policy for suspicious entries\n"
 	"      reject (default)  - reject entries with absolute paths, empty names, '..' that escape, or symlink parents\n"
@@ -588,50 +589,28 @@ int main(int argc, char **argv) {
 		num_files = argc - 3;
 
 		for (i = 3; i < argc; i++) {
-			if (strncmp (argv[i], "-z", 2) == 0) {
-				filter_count++;
+			if (strcmp (argv[i], "-z") == 0) {
+				filter_count += 2; // -z and its argument
 			}
 		}
 		num_files -= filter_count;
 	}
 
-	/* Find compression options */
+	/* Parse compression method */
 	for (i = 3; i < argc; i++) {
-#ifdef OTEZIP_ENABLE_STORE
-		if (strcmp (argv[i], "-z0") == 0) {
-			compression_method = OTEZIP_METHOD_STORE; /* Store - no compression */
+		if (strcmp (argv[i], "-z") == 0) {
+			if (i + 1 >= argc) {
+				fprintf (stderr, "Error: -z requires a method argument\n");
+				return 1;
+			}
+			int method = otezip_method_from_string (argv[i + 1]);
+			if (method == -1) {
+				fprintf (stderr, "Error: unknown compression method '%s'\n", argv[i + 1]);
+				return 1;
+			}
+			compression_method = method;
+			i++; /* skip the method argument */
 		}
-#endif
-#ifdef OTEZIP_ENABLE_DEFLATE
-		else if (strcmp (argv[i], "-z1") == 0) {
-			compression_method = OTEZIP_METHOD_DEFLATE; /* Deflate */
-		}
-#endif
-#ifdef OTEZIP_ENABLE_ZSTD
-		else if (strcmp (argv[i], "-z2") == 0) {
-			compression_method = OTEZIP_METHOD_ZSTD; /* Zstd */
-		}
-#endif
-#ifdef OTEZIP_ENABLE_LZMA
-		else if (strcmp (argv[i], "-z3") == 0) {
-			compression_method = OTEZIP_METHOD_LZMA; /* LZMA */
-		}
-#endif
-#ifdef OTEZIP_ENABLE_LZ4
-		else if (strcmp (argv[i], "-z4") == 0) {
-			compression_method = OTEZIP_METHOD_LZ4; /* LZ4 */
-		}
-#endif
-#ifdef OTEZIP_ENABLE_BROTLI
-		else if (strcmp (argv[i], "-z5") == 0) {
-			compression_method = OTEZIP_METHOD_BROTLI; /* Brotli */
-		}
-#endif
-#ifdef OTEZIP_ENABLE_LZFSE
-		else if (strcmp (argv[i], "-z6") == 0) {
-			compression_method = OTEZIP_METHOD_LZFSE; /* LZFSE */
-		}
-#endif
 	}
 
 	/* Parse extraction policy option: -P<policy> or --policy=<policy>

@@ -71,6 +71,50 @@ static void otezip_write_end_of_central_directory(FILE *fp, uint32_t num_entries
 	uint32_t central_dir_size, uint32_t central_dir_offset);
 static int otezip_finalize_archive(zip_t *za);
 
+/* Helper function to get compression method ID from string name.
+ * Returns the OTEZIP_METHOD_* value or -1 if invalid/not supported. */
+int otezip_method_from_string(const char *method_name) {
+    if (!method_name) return -1;
+
+    struct method_map {
+        const char *name;
+        int method;
+    };
+
+    static const struct method_map methods[] = {
+#ifdef OTEZIP_ENABLE_STORE
+        {"store", OTEZIP_METHOD_STORE},
+#endif
+#ifdef OTEZIP_ENABLE_DEFLATE
+        {"deflate", OTEZIP_METHOD_DEFLATE},
+#endif
+#ifdef OTEZIP_ENABLE_ZSTD
+        {"zstd", OTEZIP_METHOD_ZSTD},
+#endif
+#ifdef OTEZIP_ENABLE_LZMA
+        {"lzma", OTEZIP_METHOD_LZMA},
+#endif
+#ifdef OTEZIP_ENABLE_LZ4
+        {"lz4", OTEZIP_METHOD_LZ4},
+#endif
+#ifdef OTEZIP_ENABLE_BROTLI
+        {"brotli", OTEZIP_METHOD_BROTLI},
+#endif
+#ifdef OTEZIP_ENABLE_LZFSE
+        {"lzfse", OTEZIP_METHOD_LZFSE},
+#endif
+        {NULL, -1} /* sentinel */
+    };
+
+    for (size_t i = 0; methods[i].name != NULL; ++i) {
+        if (strcmp(method_name, methods[i].name) == 0) {
+            return methods[i].method;
+        }
+    }
+
+    return -1;
+}
+
 /* Global flag: when non-zero, verify CRC32 on extraction and fail on mismatch. */
 int otezip_verify_crc = 0;
 
