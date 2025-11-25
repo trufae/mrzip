@@ -450,22 +450,22 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 	else if (e->method == MZIP_METHOD_DEFLATE) { /* deflate */
 
 
-		/* Allocate output buffer with extra space just in case */
-		ubuf = (uint8_t*)malloc(e->uncomp_size + 10);
+		/* Allocate output buffer */
+		ubuf = (uint8_t*)malloc(e->uncomp_size);
 		if (!ubuf) {
 			free(cbuf);
 			return -1;
 		}
 
 		/* Initialize buffer to zeros */
-		memset(ubuf, 0, e->uncomp_size + 10);
+		memset(ubuf, 0, e->uncomp_size);
 
 		/* Setup decompression */
 		z_stream strm = {0};
 		strm.next_in = cbuf;
 		strm.avail_in = e->comp_size;
 		strm.next_out = ubuf;
-		strm.avail_out = e->uncomp_size + 10;
+		strm.avail_out = e->uncomp_size;
 
 		/* Try raw deflate first (standard for ZIP files) */
 		int ret = inflateInit2(&strm, -MAX_WBITS);
