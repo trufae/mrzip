@@ -341,3 +341,50 @@ test_large_random_and_fallback || exit 1
 test_duplicate_names_listing || exit 1
 test_space_in_name || exit 1
 test_large_file || exit 1
+
+# Memory leak tests with Valgrind
+check_valgrind() {
+    command -v valgrind >/dev/null 2>&1 || { echo "Valgrind not found, skipping memory leak tests"; return 1; }
+    return 0
+}
+
+test_valgrind_extract() {
+    if ! check_valgrind; then return 0; fi
+    init
+    echo "[***] Testing extractions under Valgrind"
+    $MZ -c test.zip hello.txt world.txt -z1
+    mkdir data
+    cd data
+    valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -x ../test.zip || error "Valgrind detected leaks in extraction"
+    cd ..
+    fini
+}
+
+test_valgrind_corrupted() {
+    if ! check_valgrind; then return 0; fi
+    init
+    echo "[***] Testing corrupted archive under Valgrind"
+    $MZ -c test.zip hello.txt world.txt -z1
+    dd if=test.zip of=corrupted.zip bs=1 count=100 2>/dev/null
+    mkdir data
+    cd data
+    valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -x ../corrupted.zip 2>/dev/null || true
+    cd ..
+    fini
+}
+
+test_valgrind_cycle() {
+    if ! check_valgrind; then return 0; fi
+    init
+    echo "[***] Testing compression/decompression cycle under Valgrind"
+    valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -c test.zip hello.txt world.txt -z1 || error "Valgrind detected leaks in compression"
+    mkdir data
+    cd data
+    valgrind --tool=memcheck --leak-check=full --error-exitcode=1 --quiet $MZ -x ../test.zip || error "Valgrind detected leaks in extraction"
+    cd ..
+    fini
+}
+
+test_valgrind_extract || exit 1
+test_valgrind_corrupted || exit 1
+test_valgrind_cycle || exit 1
