@@ -21,7 +21,7 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 /* Ensure we have thread-safe fallback for localtime on Windows builds */
-# include <time.h>
+#include <time.h>
 #endif
 
 #if MZIP_ENABLE_LZ4
@@ -49,25 +49,25 @@
 #endif
 
 /* Local/central directory signatures */
-#define MZIP_SIG_LFH  0x04034b50u
-#define MZIP_SIG_CDH  0x02014b50u
+#define MZIP_SIG_LFH 0x04034b50u
+#define MZIP_SIG_CDH 0x02014b50u
 #define MZIP_SIG_EOCD 0x06054b50u
 
 /* Safety limits for parsing ZIP fields to avoid integer overflows and
  * excessive allocations. These limits apply to filename/extra/comment
  * fields and to compressed/uncompressed sizes used by this library.
  */
-#define MZIP_MAX_FIELD_LEN  (64u * 1024u - 1u) /* 64 KiB - 1 to fit 16-bit lengths (65535) */
-#define MZIP_MAX_PAYLOAD    (2ULL * 1024ULL * 1024ULL * 1024ULL) /* 2 GiB */
+#define MZIP_MAX_FIELD_LEN (64u * 1024u - 1u) /* 64 KiB - 1 to fit 16-bit lengths (65535) */
+#define MZIP_MAX_PAYLOAD (2ULL * 1024ULL * 1024ULL * 1024ULL) /* 2 GiB */
 
 /* Forward declarations of helper functions */
-static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t comp_method, 
-		uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32);
+static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t comp_method,
+	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32);
 static uint32_t mzip_write_central_header(FILE *fp, const char *name, uint32_t comp_method,
-		uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32,
-		uint32_t local_header_offset, uint16_t file_time, uint16_t file_date, uint32_t external_attr);
-static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries, 
-		uint32_t central_dir_size, uint32_t central_dir_offset);
+	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32,
+	uint32_t local_header_offset, uint16_t file_time, uint16_t file_date, uint32_t external_attr);
+static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
+	uint32_t central_dir_size, uint32_t central_dir_offset);
 static int mzip_finalize_archive(zip_t *za);
 
 /* Global flag: when non-zero, verify CRC32 on extraction and fail on mismatch. */
@@ -87,108 +87,138 @@ int mzip_ignore_zipbomb = 0;
 /* Date/time conversion for ZIP entries */
 /* Convert current time to DOS date/time fields.
  * The DOS date format stores year as an offset from 1980 in 7 bits
- * (0..127 -> 1980..2107). To avoid generating out-of-range values or
+ *(0..127 -> 1980..2107). To avoid generating out-of-range values or
  * relying on unchecked `time_t` behaviour on 32-bit platforms, this
  * implementation validates and clamps fields. If time retrieval or
  * conversion fails, it falls back to 1980-01-01 00:00:00.
  */
 /* Provide a small portable wrapper for thread-safe localtime when possible.
  * On POSIX systems prefer `localtime_r`; on Windows or when not available,
- * fall back to `localtime()` and copy the result into the caller buffer. */
+ * fall back to `localtime ()` and copy the result into the caller buffer. */
 static struct tm *mzip_localtime_r(const time_t *t, struct tm *out) {
-    /* Portable fallback: use non-reentrant `localtime()` and copy the result.
-     * This avoids implicit declaration issues on platforms that don't expose
-     * `localtime_r` while remaining simple for this small utility. */
-    struct tm *tmp = localtime(t);
-    if (!tmp) return NULL;
-    *out = *tmp;
-    return out;
+	/* Portable fallback: use non-reentrant `localtime ()` and copy the result.
+	 * This avoids implicit declaration issues on platforms that don't expose
+	 * `localtime_r` while remaining simple for this small utility. */
+	struct tm *tmp = localtime (t);
+	if (!tmp) {
+		return NULL;
+	}
+	*out = *tmp;
+	return out;
 }
 
 static void mzip_get_dostime(uint16_t *dos_time, uint16_t *dos_date) {
-    time_t now = time(NULL);
-    struct tm tm_buf;
-    struct tm *tm_ptr = NULL;
+	time_t now = time (NULL);
+	struct tm tm_buf;
+	struct tm *tm_ptr = NULL;
 
-    /* Prefer reentrant version when available */
-    if (now != (time_t)-1 && mzip_localtime_r(&now, &tm_buf) != NULL) {
-        tm_ptr = &tm_buf;
-    }
-    if (!tm_ptr && now != (time_t)-1) {
-        struct tm *tmp = localtime(&now);
-        if (tmp) {
-            /* copy into stack buffer to have a consistent pointer */
-            tm_buf = *tmp;
-            tm_ptr = &tm_buf;
-        }
-    }
+	/* Prefer reentrant version when available */
+	if (now != (time_t)-1 && mzip_localtime_r (&now, &tm_buf) != NULL) {
+		tm_ptr = &tm_buf;
+	}
+	if (!tm_ptr && now != (time_t)-1) {
+		struct tm *tmp = localtime (&now);
+		if (tmp) {
+			/* copy into stack buffer to have a consistent pointer */
+			tm_buf = *tmp;
+			tm_ptr = &tm_buf;
+		}
+	}
 
-    /* Default to DOS epoch start if anything fails */
-    if (!tm_ptr) {
-        *dos_time = 0; /* 00:00:00 -> all zero */
-        *dos_date = 0; /* 1980-01-01 -> year offset 0, month 1, day 1 */
-        /* encode date: year offset 0, month 1, day 1 */
-        *dos_date = (uint16_t)(((0) << 9) | ((1) << 5) | 1);
-        return;
-    }
+	/* Default to DOS epoch start if anything fails */
+	if (!tm_ptr) {
+		 *dos_time = 0; /* 00:00:00 -> all zero */
+		 *dos_date = 0; /* 1980-01-01 -> year offset 0, month 1, day 1 */
+		/* encode date: year offset 0, month 1, day 1 */
+		*dos_date = (uint16_t) (((0) << 9) | ((1) << 5) | 1);
+		return;
+	}
 
-    /* Extract and clamp fields to valid ranges to avoid overflow or
-     * nonsensical dates on platforms with limited time_t ranges. */
-    int year = tm_ptr->tm_year + 1900; /* full year */
-    int year_off = year - 1980;
-    if (year_off < 0) year_off = 0;
-    if (year_off > 127) year_off = 127; /* DOS stores 7 bits */
+	/* Extract and clamp fields to valid ranges to avoid overflow or
+	 * nonsensical dates on platforms with limited time_t ranges. */
+	int year = tm_ptr->tm_year + 1900; /* full year */
+	int year_off = year - 1980;
+	if (year_off < 0) {
+		year_off = 0;
+	}
+	if (year_off > 127) {
+		year_off = 127; /* DOS stores 7 bits */
+	}
 
-    int mon = tm_ptr->tm_mon + 1;
-    if (mon < 1) mon = 1;
-    if (mon > 12) mon = 12;
+	int mon = tm_ptr->tm_mon + 1;
+	if (mon < 1) {
+		mon = 1;
+	}
+	if (mon > 12) {
+		mon = 12;
+	}
 
-    int day = tm_ptr->tm_mday;
-    if (day < 1) day = 1;
-    if (day > 31) day = 31;
+	int day = tm_ptr->tm_mday;
+	if (day < 1) {
+		day = 1;
+	}
+	if (day > 31) {
+		day = 31;
+	}
 
-    int hour = tm_ptr->tm_hour;
-    if (hour < 0) hour = 0;
-    if (hour > 23) hour = 23;
+	int hour = tm_ptr->tm_hour;
+	if (hour < 0) {
+		hour = 0;
+	}
+	if (hour > 23) {
+		hour = 23;
+	}
 
-    int min = tm_ptr->tm_min;
-    if (min < 0) min = 0;
-    if (min > 59) min = 59;
+	int min = tm_ptr->tm_min;
+	if (min < 0) {
+		min = 0;
+	}
+	if (min > 59) {
+		min = 59;
+	}
 
-    int sec = tm_ptr->tm_sec;
-    if (sec < 0) sec = 0;
-    if (sec > 59) sec = 59;
+	int sec = tm_ptr->tm_sec;
+	if (sec < 0) {
+		sec = 0;
+	}
+	if (sec > 59) {
+		sec = 59;
+	}
 
-    /* DOS time stores seconds divided by 2 */
-    int sec2 = sec / 2;
-    if (sec2 < 0) sec2 = 0;
-    if (sec2 > 29) sec2 = 29;
+	/* DOS time stores seconds divided by 2 */
+	int sec2 = sec / 2;
+	if (sec2 < 0) {
+		sec2 = 0;
+	}
+	if (sec2 > 29) {
+		sec2 = 29;
+	}
 
-    *dos_time = (uint16_t)((hour << 11) | (min << 5) | sec2);
-    *dos_date = (uint16_t)((year_off << 9) | (mon << 5) | day);
+	*dos_time = (uint16_t) ((hour << 11) | (min << 5) | sec2);
+	*dos_date = (uint16_t) ((year_off << 9) | (mon << 5) | day);
 }
-static uint16_t mzip_rd16 (const uint8_t *p) {
-	return (uint16_t)(p[0] | (p[1] << 8));
+static uint16_t mzip_rd16(const uint8_t *p) {
+	return (uint16_t) (p[0] | (p[1] << 8));
 }
-static uint32_t mzip_rd32 (const uint8_t *p) {
-	return (uint32_t)(p[0]        | (p[1] << 8) |
-			(p[2] << 16) | (p[3] << 24));
+static uint32_t mzip_rd32(const uint8_t *p) {
+	return (uint32_t) (p[0] | (p[1] << 8) |
+		(p[2] << 16) | (p[3] << 24));
 }
-static void mzip_wr16 (uint8_t *p, uint16_t v) {
-	p[0] = (uint8_t)(v & 0xFF);
-	p[1] = (uint8_t)((v >> 8) & 0xFF);
+static void mzip_wr16(uint8_t *p, uint16_t v) {
+	p[0] = (uint8_t) (v & 0xFF);
+	p[1] = (uint8_t) ((v >> 8) & 0xFF);
 }
-static void mzip_wr32 (uint8_t *p, uint32_t v) {
-	p[0] = (uint8_t)(v & 0xFF);
-	p[1] = (uint8_t)((v >> 8) & 0xFF);
-	p[2] = (uint8_t)((v >> 16) & 0xFF);
-	p[3] = (uint8_t)((v >> 24) & 0xFF);
+static void mzip_wr32(uint8_t *p, uint32_t v) {
+	p[0] = (uint8_t) (v & 0xFF);
+	p[1] = (uint8_t) ((v >> 8) & 0xFF);
+	p[2] = (uint8_t) ((v >> 16) & 0xFF);
+	p[3] = (uint8_t) ((v >> 24) & 0xFF);
 }
 
 /* ----  internal helpers  ---- */
 
-static inline int mzip_read_fully (FILE *fp, void *dst, size_t n) {
-	return fread (dst, 1, n, fp) == n ? 0 : -1;
+static inline int mzip_read_fully(FILE *fp, void *dst, size_t n) {
+	return fread (dst, 1, n, fp) == n? 0: -1;
 }
 
 /* locate EOCD record (last 64KiB + 22 bytes) */
@@ -201,11 +231,11 @@ static long mzip_find_eocd(FILE *fp, uint8_t *eocd_out /*22+*/, size_t *cd_size,
 	if (file_size < 22) {
 		return -1;
 	}
-    const size_t max_back = 0x10000 + 22; /* spec: comment <= 65535 */
-    /* Ensure both operands of the ?: have the same unsigned type to avoid
-     * signed/unsigned conversions. If file_size is smaller than max_back,
-     * use file_size cast to size_t, otherwise use max_back. */
-    size_t search_len = (file_size < (long)max_back) ? (size_t)file_size : max_back;
+	const size_t max_back = 0x10000 + 22; /* spec: comment <= 65535 */
+	/* Ensure both operands of the?: have the same unsigned type to avoid
+	 * signed/unsigned conversions. If file_size is smaller than max_back,
+	 * use file_size cast to size_t, otherwise use max_back. */
+	size_t search_len = (file_size < (long)max_back)? (size_t)file_size: max_back;
 
 	if (fseek (fp, file_size - (long)search_len, SEEK_SET) != 0) {
 		return -1;
@@ -216,30 +246,30 @@ static long mzip_find_eocd(FILE *fp, uint8_t *eocd_out /*22+*/, size_t *cd_size,
 	}
 	size_t i;
 	for (i = search_len - 22; i != (size_t)-1; --i) {
-        if (mzip_rd32 (buf + i) == MZIP_SIG_EOCD) {
-            /* Basic EOCD present; extract fields but validate them before
-             * returning to avoid trusting potentially corrupted archives. */
-            memcpy (eocd_out, buf + i, 22);
-            uint16_t comment_len = mzip_rd16 (buf + i + 20);
-            uint16_t entries = mzip_rd16 (buf + i + 10);
-            uint32_t cd_size_tmp = mzip_rd32 (buf + i + 12);
-            uint32_t cd_ofs_tmp  = mzip_rd32 (buf + i + 16);
-            (void)comment_len;
+		if (mzip_rd32 (buf + i) == MZIP_SIG_EOCD) {
+			/* Basic EOCD present; extract fields but validate them before
+			 * returning to avoid trusting potentially corrupted archives. */
+			memcpy (eocd_out, buf + i, 22);
+			uint16_t comment_len = mzip_rd16 (buf + i + 20);
+			uint16_t entries = mzip_rd16 (buf + i + 10);
+			uint32_t cd_size_tmp = mzip_rd32 (buf + i + 12);
+			uint32_t cd_ofs_tmp = mzip_rd32 (buf + i + 16);
+			(void)comment_len;
 
-            /* Ensure central directory lies within the file. Use 64-bit
-             * arithmetic to avoid overflow when adding offsets. */
-            uint64_t cd_end = (uint64_t)cd_ofs_tmp + (uint64_t)cd_size_tmp;
-            if (cd_ofs_tmp > (uint32_t)file_size || cd_end > (uint64_t)file_size) {
-                /* Central directory claims to be outside the file -> malformed */
-                continue;
-            }
+			/* Ensure central directory lies within the file. Use 64-bit
+			 * arithmetic to avoid overflow when adding offsets. */
+			uint64_t cd_end = (uint64_t)cd_ofs_tmp + (uint64_t)cd_size_tmp;
+			if (cd_ofs_tmp > (uint32_t)file_size || cd_end > (uint64_t)file_size) {
+				/* Central directory claims to be outside the file -> malformed */
+				continue;
+			}
 
-            /* Everything looked sane; commit results */
-            *total_entries = entries;
-            *cd_size = cd_size_tmp;
-            *cd_ofs = cd_ofs_tmp;
-            return (long)(file_size - search_len + i);
-        }
+			/* Everything looked sane; commit results */
+			*total_entries = entries;
+			*cd_size = cd_size_tmp;
+			*cd_ofs = cd_ofs_tmp;
+			return (long) (file_size - search_len + i);
+		}
 	}
 	/* not found */
 	return -1;
@@ -247,192 +277,210 @@ static long mzip_find_eocd(FILE *fp, uint8_t *eocd_out /*22+*/, size_t *cd_size,
 
 /* parse central directory into array of mzip_entry */
 static int mzip_load_central(zip_t *za) {
-	uint8_t  eocd[22];
-	size_t   cd_size;
+	uint8_t eocd[22];
+	size_t cd_size;
 	uint32_t cd_ofs;
 	uint16_t n_entries;
 
-    if (mzip_find_eocd (za->fp, eocd, &cd_size, &cd_ofs, &n_entries) < 0) {
-        return -1;
-    }
+	if (mzip_find_eocd (za->fp, eocd, &cd_size, &cd_ofs, &n_entries) < 0) {
+		return -1;
+	}
 
-    /* Validate central directory against actual file size to avoid
-     * out-of-bounds reads or huge allocations. */
-    if (fseek (za->fp, 0, SEEK_END) != 0) return -1;
-    long file_size_long = ftell (za->fp);
-    if (file_size_long < 0) return -1;
-    uint64_t file_size = (uint64_t)file_size_long;
-    if ((uint64_t)cd_ofs + (uint64_t)cd_size > file_size) {
-        return -1;
-    }
+	/* Validate central directory against actual file size to avoid
+	 * out-of-bounds reads or huge allocations. */
+	if (fseek (za->fp, 0, SEEK_END) != 0) {
+		return -1;
+	}
+	long file_size_long = ftell (za->fp);
+	if (file_size_long < 0) {
+		return -1;
+	}
+	uint64_t file_size = (uint64_t)file_size_long;
+	if ((uint64_t)cd_ofs + (uint64_t)cd_size > file_size) {
+		return -1;
+	}
 
-    /* read entire central directory */
-    if (fseek (za->fp, cd_ofs, SEEK_SET) != 0) {
-        return -1;
-    }
-    if (cd_size == 0) return -1;
-    uint8_t *cd_buf = (uint8_t*)malloc(cd_size);
-    if (!cd_buf) {
-        return -1;
-    }
-    if (mzip_read_fully (za->fp, cd_buf, cd_size) != 0) {
-        free (cd_buf);
-        return -1;
-    }
+	/* read entire central directory */
+	if (fseek (za->fp, cd_ofs, SEEK_SET) != 0) {
+		return -1;
+	}
+	if (cd_size == 0) {
+		return -1;
+	}
+	uint8_t *cd_buf = (uint8_t *)malloc (cd_size);
+	if (!cd_buf) {
+		return -1;
+	}
+	if (mzip_read_fully (za->fp, cd_buf, cd_size) != 0) {
+		free (cd_buf);
+		return -1;
+	}
 
-	za->entries = (struct mzip_entry*)calloc (n_entries, sizeof (struct mzip_entry));
+	za->entries = (struct mzip_entry *)calloc (n_entries, sizeof (struct mzip_entry));
 	za->n_entries = n_entries;
 
 	if (!za->entries) {
-		free(cd_buf);
+		free (cd_buf);
 		return -1;
 	}
 
 	size_t off = 0;
 	uint16_t i;
-    for (i = 0; i < n_entries; i++) {
-        /* Ensure we have at least the fixed-size central header available */
-        if (off + 46 > cd_size || mzip_rd32 (cd_buf + off) != MZIP_SIG_CDH) {
-            free (cd_buf);
-            return -1; /* malformed */
-        }
-        const uint8_t *h = cd_buf + off;
+	for (i = 0; i < n_entries; i++) {
+		/* Ensure we have at least the fixed-size central header available */
+		if (off + 46 > cd_size || mzip_rd32 (cd_buf + off) != MZIP_SIG_CDH) {
+			free (cd_buf);
+			return -1; /* malformed */
+		}
+		const uint8_t *h = cd_buf + off;
 
 		/* Reject entries that rely on data descriptors (general purpose
 		 * bit 3). This project explicitly does not support data descriptors
-		 * (see README). If we encounter them, fail early with a clear
+		 *(see README). If we encounter them, fail early with a clear
 		 * error instead of continuing in an inconsistent state. */
 		uint16_t gp_flag = mzip_rd16 (h + 8);
 		if (gp_flag & 0x0008) {
-			fprintf(stderr, "mzip: data descriptors (general purpose flag bit 3) not supported\n");
+			fprintf (stderr, "mzip: data descriptors (general purpose flag bit 3) not supported\n");
 			free (cd_buf);
 			return -1;
 		}
 
-        uint16_t filename_len = mzip_rd16 (h + 28);
-        uint16_t extra_len    = mzip_rd16 (h + 30);
-        uint16_t comment_len  = mzip_rd16 (h + 32);
+		uint16_t filename_len = mzip_rd16 (h + 28);
+		uint16_t extra_len = mzip_rd16 (h + 30);
+		uint16_t comment_len = mzip_rd16 (h + 32);
 
-        /* Field lengths are 16-bit per spec; further validation occurs when
-         * advancing offsets and allocating memory below. */
+		/* Field lengths are 16-bit per spec; further validation occurs when
+		 * advancing offsets and allocating memory below. */
 
 		struct mzip_entry *e = &za->entries[i];
-		e->method            = mzip_rd16 (h + 10);
-		e->file_time         = mzip_rd16 (h + 12);
-		e->file_date         = mzip_rd16 (h + 14);
-		e->crc32             = mzip_rd32 (h + 16);
-        e->comp_size         = mzip_rd32 (h + 20);
-        e->uncomp_size       = mzip_rd32 (h + 24);
-        e->local_hdr_ofs     = mzip_rd32 (h + 42);
+		e->method = mzip_rd16 (h + 10);
+		e->file_time = mzip_rd16 (h + 12);
+		e->file_date = mzip_rd16 (h + 14);
+		e->crc32 = mzip_rd32 (h + 16);
+		e->comp_size = mzip_rd32 (h + 20);
+		e->uncomp_size = mzip_rd32 (h + 24);
+		e->local_hdr_ofs = mzip_rd32 (h + 42);
 
-        /* Reject entries with absurdly large sizes to avoid allocating
-         * more than our allowed maximum. */
-        if ((uint64_t)e->comp_size > MZIP_MAX_PAYLOAD || (uint64_t)e->uncomp_size > MZIP_MAX_PAYLOAD) {
-            free (cd_buf);
-            return -1;
-        }
-		e->external_attr     = mzip_rd32 (h + 38);
+		/* Reject entries with absurdly large sizes to avoid allocating
+		 * more than our allowed maximum. */
+		if ((uint64_t)e->comp_size > MZIP_MAX_PAYLOAD || (uint64_t)e->uncomp_size > MZIP_MAX_PAYLOAD) {
+			free (cd_buf);
+			return -1;
+		}
+		e->external_attr = mzip_rd32 (h + 38);
 
-        e->name = (char*)malloc (filename_len + 1u);
-        if (!e->name) {
-            free (cd_buf);
-            return -1;
-        }
-        /* Ensure the filename bytes are within the central directory buffer */
-        if ((size_t)(46 + filename_len) > cd_size - off) {
-            free (e->name);
-            free (cd_buf);
-            return -1;
-        }
-        memcpy (e->name, h + 46, filename_len);
-        e->name[filename_len] = '\0';
+		e->name = (char *)malloc (filename_len + 1u);
+		if (!e->name) {
+			free (cd_buf);
+			return -1;
+		}
+		/* Ensure the filename bytes are within the central directory buffer */
+		if ((size_t) (46 + filename_len) > cd_size - off) {
+			free (e->name);
+			free (cd_buf);
+			return -1;
+		}
+		memcpy (e->name, h + 46, filename_len);
+		e->name[filename_len] = '\0';
 
-        /* Safely advance offset, checking for overflow and bounds */
-        uint64_t advance = 46 + (uint64_t)filename_len + (uint64_t)extra_len + (uint64_t)comment_len;
-        if (advance > (uint64_t)cd_size - off) {
-            free (cd_buf);
-            return -1;
-        }
-        off += (size_t)advance;
-    }
+		/* Safely advance offset, checking for overflow and bounds */
+		uint64_t advance = 46 + (uint64_t)filename_len + (uint64_t)extra_len + (uint64_t)comment_len;
+		if (advance > (uint64_t)cd_size - off) {
+			free (cd_buf);
+			return -1;
+		}
+		off += (size_t)advance;
+	}
 	free (cd_buf);
 	return 0;
 }
 
 /* load entire (uncompressed) file into memory and hand ownership to caller */
 static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf, uint32_t *out_sz) {
-    /* move to local header */
-    /* Validate local header offset against file size to avoid seeking
-     * outside the file. Use 64-bit math for safety. */
-    if (fseek (za->fp, 0, SEEK_END) != 0) return -1;
-    long file_sz_l = ftell (za->fp);
-    if (file_sz_l < 0) return -1;
-    uint64_t file_sz = (uint64_t)file_sz_l;
-    if ((uint64_t)e->local_hdr_ofs > file_sz) return -1;
-    if (fseek (za->fp, (long)e->local_hdr_ofs, SEEK_SET) != 0) {
-        return -1;
-    }
-    uint8_t lfh[30];
-    if (mzip_read_fully (za->fp, lfh, 30) != 0) {
-        return -1;
-    }
+	/* move to local header */
+	/* Validate local header offset against file size to avoid seeking
+	 * outside the file. Use 64-bit math for safety. */
+	if (fseek (za->fp, 0, SEEK_END) != 0) {
+		return -1;
+	}
+	long file_sz_l = ftell (za->fp);
+	if (file_sz_l < 0) {
+		return -1;
+	}
+	uint64_t file_sz = (uint64_t)file_sz_l;
+	if ((uint64_t)e->local_hdr_ofs > file_sz) {
+		return -1;
+	}
+	if (fseek (za->fp, (long)e->local_hdr_ofs, SEEK_SET) != 0) {
+		return -1;
+	}
+	uint8_t lfh[30];
+	if (mzip_read_fully (za->fp, lfh, 30) != 0) {
+		return -1;
+	}
 	if (mzip_rd32 (lfh) != MZIP_SIG_LFH) {
 		return -1;
 	}
 
 	/* Check general purpose flag in local header: reject data descriptors
-	 * (bit 3). The library does not support deferred CRC/size via
+	 *(bit 3). The library does not support deferred CRC/size via
 	 * data descriptors. Fail with a descriptive error to avoid entering
 	 * an inconsistent state. */
 	uint16_t lfh_gp = mzip_rd16 (lfh + 6);
 	if (lfh_gp & 0x0008) {
-		fprintf(stderr, "mzip: data descriptors (general purpose flag bit 3) not supported\n");
+		fprintf (stderr, "mzip: data descriptors (general purpose flag bit 3) not supported\n");
 		return -1;
 	}
-    uint16_t fn_len = mzip_rd16 (lfh + 26);
-    uint16_t extra_len = mzip_rd16 (lfh + 28);
+	uint16_t fn_len = mzip_rd16 (lfh + 26);
+	uint16_t extra_len = mzip_rd16 (lfh + 28);
 
-    /* Filename/extra lengths are 16-bit per spec. Further bounds checks
-     * are performed for file offsets and allocations below. */
+	/* Filename/extra lengths are 16-bit per spec. Further bounds checks
+	 * are performed for file offsets and allocations below. */
 
-    /* Ensure the compressed data lies within the file bounds. Calculate
-     * offset to compressed data = local_hdr_ofs + 30 + fn_len + extra_len. */
-    uint64_t data_ofs = (uint64_t)e->local_hdr_ofs + 30ULL + (uint64_t)fn_len + (uint64_t)extra_len;
-    if (data_ofs > file_sz) return -1;
-    if ((uint64_t)e->comp_size > MZIP_MAX_PAYLOAD || (uint64_t)e->uncomp_size > MZIP_MAX_PAYLOAD) return -1;
-    if (data_ofs + (uint64_t)e->comp_size > file_sz) return -1;
+	/* Ensure the compressed data lies within the file bounds. Calculate
+	 * offset to compressed data = local_hdr_ofs + 30 + fn_len + extra_len. */
+	uint64_t data_ofs = (uint64_t)e->local_hdr_ofs + 30ULL + (uint64_t)fn_len + (uint64_t)extra_len;
+	if (data_ofs > file_sz) {
+		return -1;
+	}
+	if ((uint64_t)e->comp_size > MZIP_MAX_PAYLOAD || (uint64_t)e->uncomp_size > MZIP_MAX_PAYLOAD) {
+		return -1;
+	}
+	if (data_ofs + (uint64_t)e->comp_size > file_sz) {
+		return -1;
+	}
 
-    /* Protect against zipbombs: require that expected uncompressed size from
-     * the central directory is within a reasonable bound relative to the
-     * compressed size. If the entry claims a huge expansion, fail unless the
-     * global `mzip_ignore_zipbomb` flag is set by the caller (CLI override).
-     * We compute allowed = comp_size * ratio + slack and compare against the
-     * declared uncompressed size. Use 64-bit math to avoid overflow. */
-    if (!mzip_ignore_zipbomb && e->comp_size > 0) {
-        uint64_t allowed = (uint64_t)e->comp_size * mzip_max_expansion_ratio;
-        allowed += mzip_max_expansion_slack;
-        if ((uint64_t)e->uncomp_size > allowed) {
-            /* suspiciously large uncompressed size */
-            fprintf(stderr, "mzip: entry '%s' claims huge uncompressed size (%u), rejecting to avoid zipbomb\n",
-                    e->name ? e->name : "<unknown>", e->uncomp_size);
-            return -1;
-        }
-    }
+	/* Protect against zipbombs: require that expected uncompressed size from
+	 * the central directory is within a reasonable bound relative to the
+	 * compressed size. If the entry claims a huge expansion, fail unless the
+	 * global `mzip_ignore_zipbomb` flag is set by the caller (CLI override).
+	 * We compute allowed = comp_size * ratio + slack and compare against the
+	 * declared uncompressed size. Use 64-bit math to avoid overflow. */
+	if (!mzip_ignore_zipbomb && e->comp_size > 0) {
+		uint64_t allowed = (uint64_t)e->comp_size * mzip_max_expansion_ratio;
+		allowed += mzip_max_expansion_slack;
+		if ((uint64_t)e->uncomp_size > allowed) {
+			/* suspiciously large uncompressed size */
+			fprintf (stderr, "mzip: entry '%s' claims huge uncompressed size (%u), rejecting to avoid zipbomb\n",
+				e->name? e->name: "<unknown>", e->uncomp_size);
+			return -1;
+		}
+	}
 
-    /* seek to compressed data (we were at local header +30 already) */
-    if (fseek (za->fp, (long)data_ofs, SEEK_SET) != 0) {
-        return -1;
-    }
+	/* seek to compressed data (we were at local header +30 already) */
+	if (fseek (za->fp, (long)data_ofs, SEEK_SET) != 0) {
+		return -1;
+	}
 
-    /* read compressed data */
-    uint8_t *cbuf = (uint8_t*)malloc ((size_t)e->comp_size ? (size_t)e->comp_size : 1);
-    if (!cbuf) {
-        return -1;
-    }
-    if (e->comp_size && mzip_read_fully(za->fp, cbuf, e->comp_size) != 0) {
-        free (cbuf);
-        return -1;
-    }
+	/* read compressed data */
+	uint8_t *cbuf = (uint8_t *)malloc ((size_t)e->comp_size? (size_t)e->comp_size: 1);
+	if (!cbuf) {
+		return -1;
+	}
+	if (e->comp_size && mzip_read_fully (za->fp, cbuf, e->comp_size) != 0) {
+		free (cbuf);
+		return -1;
+	}
 
 	uint8_t *ubuf;
 #ifdef MZIP_ENABLE_STORE
@@ -443,60 +491,59 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 #ifdef MZIP_ENABLE_DEFLATE
 	else if (e->method == MZIP_METHOD_DEFLATE) { /* deflate */
 
-
 		/* Allocate output buffer */
-		ubuf = (uint8_t*)malloc(e->uncomp_size);
+		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
-			free(cbuf);
+			free (cbuf);
 			return -1;
 		}
 
 		/* Initialize buffer to zeros */
-		memset(ubuf, 0, e->uncomp_size);
+		memset (ubuf, 0, e->uncomp_size);
 
 		/* Setup decompression */
-		z_stream strm = {0};
+		z_stream strm = { 0 };
 		strm.next_in = cbuf;
 		strm.avail_in = e->comp_size;
 		strm.next_out = ubuf;
 		strm.avail_out = e->uncomp_size;
 
 		/* Try raw deflate first (standard for ZIP files) */
-		int ret = inflateInit2(&strm, -MAX_WBITS);
+		int ret = inflateInit2 (&strm, -MAX_WBITS);
 		if (ret != Z_OK) {
 			/* Fall back to direct copy */
-			memcpy(ubuf, cbuf, e->uncomp_size < e->comp_size ? e->uncomp_size : e->comp_size);
+			memcpy (ubuf, cbuf, e->uncomp_size < e->comp_size? e->uncomp_size: e->comp_size);
 			*out_buf = ubuf;
 			*out_sz = e->uncomp_size;
-			free(cbuf);
+			free (cbuf);
 			return 0;
 		}
 
 		/* Attempt decompression */
-		ret = inflate(&strm, Z_FINISH);
-		inflateEnd(&strm);
+		ret = inflate (&strm, Z_FINISH);
+		inflateEnd (&strm);
 
 		/* If decompression failed */
 		if (ret != Z_STREAM_END) {
-			free(ubuf);
-			free(cbuf);
+			free (ubuf);
+			free (cbuf);
 			return -1;
 		}
 
-		free(cbuf);
+		free (cbuf);
 	}
 #endif
 #ifdef MZIP_ENABLE_ZSTD
 	else if (e->method == MZIP_METHOD_ZSTD) { /* zstd */
-		ubuf = (uint8_t*)malloc (e->uncomp_size);
+		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
 			return -1;
 		}
-		z_stream strm = {0};
-		strm.next_in   = cbuf;
-		strm.avail_in  = e->comp_size;
-		strm.next_out  = ubuf;
+		z_stream strm = { 0 };
+		strm.next_in = cbuf;
+		strm.avail_in = e->comp_size;
+		strm.next_out = ubuf;
 		strm.avail_out = e->uncomp_size;
 
 		if (zstdDecompressInit (&strm) != Z_OK) {
@@ -516,15 +563,15 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 #endif
 #ifdef MZIP_ENABLE_LZFSE
 	else if (e->method == MZIP_METHOD_LZFSE) { /* lzfse */
-		ubuf = (uint8_t*)malloc (e->uncomp_size);
+		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
 			return -1;
 		}
-		z_stream strm = {0};
-		strm.next_in   = cbuf;
-		strm.avail_in  = e->comp_size;
-		strm.next_out  = ubuf;
+		z_stream strm = { 0 };
+		strm.next_in = cbuf;
+		strm.avail_in = e->comp_size;
+		strm.next_out = ubuf;
 		strm.avail_out = e->uncomp_size;
 
 		if (lzfseDecompressInit (&strm) != Z_OK) {
@@ -556,19 +603,21 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 #endif
 #ifdef MZIP_ENABLE_LZMA
 	else if (e->method == MZIP_METHOD_LZMA) { /* lzma */
-		ubuf = (uint8_t*)malloc (e->uncomp_size);
+		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
 			return -1;
 		}
-		z_stream strm = {0};
-		strm.next_in   = cbuf;
-		strm.avail_in  = e->comp_size;
-		strm.next_out  = ubuf;
+		z_stream strm = { 0 };
+		strm.next_in = cbuf;
+		strm.avail_in = e->comp_size;
+		strm.next_out = ubuf;
 		strm.avail_out = e->uncomp_size;
 
-		if (lzmaDecompressInit(&strm) != Z_OK) {
-			free(cbuf); free(ubuf); return -1;
+		if (lzmaDecompressInit (&strm) != Z_OK) {
+			free (cbuf);
+			free (ubuf);
+			return -1;
 		}
 		int zret = lzmaDecompress (&strm, Z_FINISH);
 		lzmaDecompressEnd (&strm);
@@ -582,15 +631,15 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 #endif
 #ifdef MZIP_ENABLE_BROTLI
 	else if (e->method == MZIP_METHOD_BROTLI) { /* brotli */
-		ubuf = (uint8_t*)malloc (e->uncomp_size);
+		ubuf = (uint8_t *)malloc (e->uncomp_size);
 		if (!ubuf) {
 			free (cbuf);
 			return -1;
 		}
-		z_stream strm = {0};
-		strm.next_in   = cbuf;
-		strm.avail_in  = e->comp_size;
-		strm.next_out  = ubuf;
+		z_stream strm = { 0 };
+		strm.next_in = cbuf;
+		strm.avail_in = e->comp_size;
+		strm.next_out = ubuf;
 		strm.avail_out = e->uncomp_size;
 
 		if (brotliDecompressInit (&strm) != Z_OK) {
@@ -612,36 +661,38 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 		free (cbuf);
 		return -1; /* unsupported method */
 	}
-    /* Verify CRC32 of uncompressed data if requested or warn on mismatch. */
-    {
-        uint32_t computed_crc = mzip_crc32(0, ubuf, e->uncomp_size);
-        if (computed_crc != e->crc32) {
-            if (mzip_verify_crc) {
-                /* On strict verify, treat mismatch as fatal for this entry. */
-                free(ubuf);
-                return -1;
-            } else {
-                /* Non-strict mode: warn but continue. */
-                fprintf(stderr, "Warning: CRC mismatch for '%s' (expected 0x%08x, got 0x%08x)\n",
-                        e->name ? e->name : "<unknown>", e->crc32, computed_crc);
-            }
-        }
-    }
+	/* Verify CRC32 of uncompressed data if requested or warn on mismatch. */
+	{
+		uint32_t computed_crc = mzip_crc32 (0, ubuf, e->uncomp_size);
+		if (computed_crc != e->crc32) {
+			if (mzip_verify_crc) {
+				/* On strict verify, treat mismatch as fatal for this entry. */
+				free (ubuf);
+				return -1;
+			} else {
+				/* Non-strict mode: warn but continue. */
+				fprintf (stderr, "Warning: CRC mismatch for '%s' (expected 0x%08x, got 0x%08x)\n",
+					e->name? e->name: "<unknown>", e->crc32, computed_crc);
+			}
+		}
+	}
 
-    *out_buf = ubuf;
-    *out_sz  = e->uncomp_size;
-    return 0;
+	*out_buf = ubuf;
+	*out_sz = e->uncomp_size;
+	return 0;
 }
 
 /* --------------  public API implementation  --------------- */
 
 zip_t *zip_open(const char *path, int flags, int *errorp) {
-	zip_t *za = (zip_t*)calloc (1, sizeof (zip_t));
+	zip_t *za = (zip_t *)calloc (1, sizeof (zip_t));
 	const char *mode;
 	int exists = 0;
 
 	if (!za) {
-		if (errorp) *errorp = -1;
+		if (errorp) {
+			*errorp = -1;
+		}
 		return NULL;
 	}
 
@@ -651,7 +702,7 @@ zip_t *zip_open(const char *path, int flags, int *errorp) {
 	if (flags & ZIP_CREATE) {
 		if ((flags & ZIP_EXCL) && (flags & ZIP_TRUNCATE)) {
 			if (errorp) {
-				*errorp = -1; /* incompatible flags */
+				 *errorp = -1; /* incompatible flags */
 			}
 			free (za);
 			return NULL;
@@ -665,12 +716,12 @@ zip_t *zip_open(const char *path, int flags, int *errorp) {
 		}
 		if (exists && (flags & ZIP_EXCL)) {
 			if (errorp) {
-				*errorp = -1; /* file exists but EXCL set */
+				 *errorp = -1; /* file exists but EXCL set */
 			}
 			free (za);
 			return NULL;
 		}
-		if (exists && !(flags & ZIP_TRUNCATE)) {
+		if (exists && ! (flags & ZIP_TRUNCATE)) {
 			/* Open existing for append */
 			mode = "r+b";
 		} else {
@@ -699,7 +750,7 @@ zip_t *zip_open(const char *path, int flags, int *errorp) {
 		return NULL;
 	}
 	za->fp = fp;
-	if (za->mode == 0 || (exists && !(flags & ZIP_TRUNCATE))) {
+	if (za->mode == 0 || (exists && ! (flags & ZIP_TRUNCATE))) {
 		/* Load central directory for existing archive */
 		if (mzip_load_central (za) != 0) {
 			zip_close (za);
@@ -728,7 +779,7 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 #ifdef MZIP_ENABLE_STORE
 	if (*method == MZIP_METHOD_STORE) {
 		/* Store (no compression) */
-		*out_buf = (uint8_t*)malloc(in_size);
+		*out_buf = (uint8_t *)malloc (in_size);
 		if (!*out_buf) {
 			return -1;
 		}
@@ -741,12 +792,12 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 #ifdef MZIP_ENABLE_DEFLATE
 	if (*method == MZIP_METHOD_DEFLATE) {
 		/* Deflate compression */
-		uLong comp_bound = compressBound(in_size);
-		*out_buf = (uint8_t*)malloc(comp_bound);
+		uLong comp_bound = compressBound (in_size);
+		*out_buf = (uint8_t *)malloc (comp_bound);
 		if (!*out_buf) {
 			return -1;
 		}
-		z_stream strm = {0};
+		z_stream strm = { 0 };
 		/* For ZIP files, we need raw deflate (no zlib header) - use negative windowBits */
 		if (deflateInit2 (&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -MAX_WBITS, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
 			free (*out_buf);
@@ -780,7 +831,7 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 #ifdef MZIP_ENABLE_LZ4
 	if (*method == MZIP_METHOD_LZ4) {
 		/* LZ4 compression using radare2's implementation */
-		*out_buf = (uint8_t*)malloc (in_size * 2); /* Worst case scenario */
+		 *out_buf = (uint8_t *)malloc (in_size * 2); /* Worst case scenario */
 		if (!*out_buf) {
 			return -1;
 		}
@@ -795,7 +846,7 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 		if (*out_size >= in_size) {
 			free (*out_buf);
 			*method = MZIP_METHOD_STORE;
-			return mzip_compress_data(in_buf, in_size, out_buf, out_size, method);
+			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
 		}
 
 		return 0;
@@ -806,11 +857,11 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 		/* LZMA compression */
 		/* Worst-case bound: input size + header + overhead for incompressible data */
 		size_t out_cap = in_size + MZIP_LZMA_HEADER_SIZE + (in_size / MZIP_LZMA_OVERHEAD_RATIO);
-		*out_buf = (uint8_t*)malloc(out_cap);
+		*out_buf = (uint8_t *)malloc (out_cap);
 		if (!*out_buf) {
 			return -1;
 		}
-		z_stream strm = {0};
+		z_stream strm = { 0 };
 		if (lzmaInit (&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
 			free (*out_buf);
 			return -1;
@@ -821,81 +872,86 @@ static int mzip_compress_data(uint8_t *in_buf, size_t in_size, uint8_t **out_buf
 		strm.next_out = *out_buf;
 		strm.avail_out = (uInt)out_cap;
 
-        int ret = lzmaCompress (&strm, Z_FINISH);
-        if (ret != Z_STREAM_END) {
-            /* If our minimal LZMA failed for this input, fall back to STORE
-             * instead of propagating an error. This keeps behavior robust
-             * for very large or pathological inputs. */
-            lzmaEnd (&strm);
-            free (*out_buf);
-            *out_buf = NULL;
-            *method = MZIP_METHOD_STORE;
-            return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
-        }
+		int ret = lzmaCompress (&strm, Z_FINISH);
+		if (ret != Z_STREAM_END) {
+			/* If our minimal LZMA failed for this input, fall back to STORE
+			 * instead of propagating an error. This keeps behavior robust
+			 * for very large or pathological inputs. */
+			lzmaEnd (&strm);
+			free (*out_buf);
+			*out_buf = NULL;
+			*method = MZIP_METHOD_STORE;
+			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+		}
 
-        *out_size = strm.total_out;
-        lzmaEnd (&strm);
+		*out_size = strm.total_out;
+		lzmaEnd (&strm);
 
-        /* If compression didn't reduce size, fall back to STORE */
-        if (*out_size >= in_size) {
-            free (*out_buf);
-            *method = MZIP_METHOD_STORE;
-            return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
-        }
-        return 0;
+		/* If compression didn't reduce size, fall back to STORE */
+		if (*out_size >= in_size) {
+			free (*out_buf);
+			*method = MZIP_METHOD_STORE;
+			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+		}
+		return 0;
 	}
 #endif
 #ifdef MZIP_ENABLE_BROTLI
-    if (*method == MZIP_METHOD_BROTLI) {
-        /* Brotli compression (using vendored upstream implementation via wrappers) */
-        size_t out_cap = (in_size ? (in_size * 2 + 64) : 128);
-        *out_buf = (uint8_t*)malloc(out_cap);
-        if (!*out_buf) {
-            return -1;
-        }
-        z_stream strm = {0};
-        if (brotliInit(&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
-            free(*out_buf);
-            *out_buf = NULL;
-            return -1;
-        }
+	if (*method == MZIP_METHOD_BROTLI) {
+		/* Brotli compression (using vendored upstream implementation via wrappers) */
+		size_t out_cap = (in_size? (in_size * 2 + 64): 128);
+		*out_buf = (uint8_t *)malloc (out_cap);
+		if (!*out_buf) {
+			return -1;
+		}
+		z_stream strm = { 0 };
+		if (brotliInit (&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
+			free (*out_buf);
+			*out_buf = NULL;
+			return -1;
+		}
 
-        strm.next_in = in_buf;
-        strm.avail_in = (uInt)in_size;
-        strm.next_out = *out_buf;
-        strm.avail_out = (uInt)out_cap;
+		strm.next_in = in_buf;
+		strm.avail_in = (uInt)in_size;
+		strm.next_out = *out_buf;
+		strm.avail_out = (uInt)out_cap;
 
-        int ret = brotliCompress(&strm, Z_FINISH);
-        if (ret != Z_STREAM_END) {
-            /* If we ran out of space, grow once and retry */
-            if (ret == Z_OK && strm.avail_out == 0) {
-                size_t used = (size_t)strm.total_out;
-                out_cap *= 2;
-                uint8_t *nb = (uint8_t*)realloc(*out_buf, out_cap);
-                if (!nb) { brotliEnd(&strm); free(*out_buf); *out_buf=NULL; return -1; }
-                *out_buf = nb;
-                strm.next_out = *out_buf + used;
-                strm.avail_out = (uInt)(out_cap - used);
-                ret = brotliCompress(&strm, Z_FINISH);
-            }
-        }
-        if (ret != Z_STREAM_END) {
-            brotliEnd(&strm);
-            free(*out_buf);
-            *out_buf = NULL;
-            return -1;
-        }
-        *out_size = (uint32_t)strm.total_out;
-        brotliEnd(&strm);
+		int ret = brotliCompress (&strm, Z_FINISH);
+		if (ret != Z_STREAM_END) {
+			/* If we ran out of space, grow once and retry */
+			if (ret == Z_OK && strm.avail_out == 0) {
+				size_t used = (size_t)strm.total_out;
+				out_cap *= 2;
+				uint8_t *nb = (uint8_t *)realloc (*out_buf, out_cap);
+				if (!nb) {
+					brotliEnd (&strm);
+					free (*out_buf);
+					*out_buf = NULL;
+					return -1;
+				}
+				*out_buf = nb;
+				strm.next_out = *out_buf + used;
+				strm.avail_out = (uInt) (out_cap - used);
+				ret = brotliCompress (&strm, Z_FINISH);
+			}
+		}
+		if (ret != Z_STREAM_END) {
+			brotliEnd (&strm);
+			free (*out_buf);
+			*out_buf = NULL;
+			return -1;
+		}
+		*out_size = (uint32_t)strm.total_out;
+		brotliEnd (&strm);
 
-        /* For empty inputs, Brotli still emits a minimal frame; keep it. */
-        if (in_size > 0 && *out_size >= in_size) {
-            free(*out_buf);
-            *method = MZIP_METHOD_STORE;
-            return mzip_compress_data(in_buf, in_size, out_buf, out_size, method);
-        }
-        return 0;
-    }
+		/* For empty inputs, Brotli still emits a minimal frame; keep it. */
+		if (in_size > 0 && *out_size >= in_size) {
+			free (*out_buf);
+			*method = MZIP_METHOD_STORE;
+			return mzip_compress_data (in_buf, in_size, out_buf, out_size, method);
+		}
+		return 0;
+	}
 #endif
 
 	/* Unsupported method or none of the above */
@@ -920,17 +976,17 @@ zip_int64_t zip_file_add(zip_t *za, const char *name, zip_source_t *src, zip_fla
 	struct mzip_entry *e = &za->entries[za->n_entries];
 	memset (e, 0, sizeof (struct mzip_entry));
 
-        /* strdup is POSIX; allocate and copy to be portable and avoid
-         * implicit declaration warnings. */
-        size_t nlen = strlen(name) + 1;
-        if (nlen - 1 > MZIP_MAX_FIELD_LEN) {
-            return -1;
-        }
-        e->name = (char*)malloc(nlen);
-        if (!e->name) {
-            return -1;
-        }
-        memcpy(e->name, name, nlen);
+	/* strdup is POSIX; allocate and copy to be portable and avoid
+	 * implicit declaration warnings. */
+	size_t nlen = strlen (name) + 1;
+	if (nlen - 1 > MZIP_MAX_FIELD_LEN) {
+		return -1;
+	}
+	e->name = (char *)malloc (nlen);
+	if (!e->name) {
+		return -1;
+	}
+	memcpy (e->name, name, nlen);
 
 	/* Use the default compression method if set, otherwise store */
 	if (za->default_method > 0) {
@@ -940,53 +996,53 @@ zip_int64_t zip_file_add(zip_t *za, const char *name, zip_source_t *src, zip_fla
 		e->method = 0;
 	}
 
-    /* Validate uncompressed size fits our limits and ZIP 32-bit field */
-    if ((uint64_t)src->len > MZIP_MAX_PAYLOAD || (uint64_t)src->len > (uint64_t)UINT32_MAX) {
-        free (e->name);
-        return -1;
-    }
-    e->uncomp_size = (uint32_t)src->len;
+	/* Validate uncompressed size fits our limits and ZIP 32-bit field */
+	if ((uint64_t)src->len > MZIP_MAX_PAYLOAD || (uint64_t)src->len > (uint64_t)UINT32_MAX) {
+		free (e->name);
+		return -1;
+	}
+	e->uncomp_size = (uint32_t)src->len;
 
 	/* Calculate CRC-32 of the uncompressed data */
-	e->crc32 = mzip_crc32(0, src->buf, src->len);
+	e->crc32 = mzip_crc32 (0, src->buf, src->len);
 
 	/* Set current time for file timestamp */
-	mzip_get_dostime(&e->file_time, &e->file_date);
+	mzip_get_dostime (&e->file_time, &e->file_date);
 
 	/* Set default permissions: 0644 for files */
 	e->external_attr = 0100644 << 16; /* S_IFREG | 0644 << 16 */
 
 	/* Get current position for local header offset */
-    long current_pos = ftell (za->fp);
-    if (current_pos < 0) {
-        free (e->name);
-        return -1;
-    }
+	long current_pos = ftell (za->fp);
+	if (current_pos < 0) {
+		free (e->name);
+		return -1;
+	}
 
-    /* Ensure local header offset fits into ZIP 32-bit field */
-    if ((uint64_t)current_pos > (uint64_t)UINT32_MAX) {
-        free (e->name);
-        return -1;
-    }
-    e->local_hdr_ofs = (uint32_t)current_pos;
+	/* Ensure local header offset fits into ZIP 32-bit field */
+	if ((uint64_t)current_pos > (uint64_t)UINT32_MAX) {
+		free (e->name);
+		return -1;
+	}
+	e->local_hdr_ofs = (uint32_t)current_pos;
 
 	/* Compress the data using the selected method */
 	uint8_t *comp_buf = NULL;
 	uint32_t comp_size = 0;
 
 	/* Compress the data using the selected method */
-	if (mzip_compress_data ((uint8_t*)src->buf, src->len, &comp_buf, &comp_size, &e->method) != 0) {
+	if (mzip_compress_data ((uint8_t *)src->buf, src->len, &comp_buf, &comp_size, &e->method) != 0) {
 		free (e->name);
 		return -1;
 	}
 
-    /* Validate compressed size too */
-    if ((uint64_t)comp_size > MZIP_MAX_PAYLOAD) {
-        free (e->name);
-        free (comp_buf);
-        return -1;
-    }
-    e->comp_size = comp_size;
+	/* Validate compressed size too */
+	if ((uint64_t)comp_size > MZIP_MAX_PAYLOAD) {
+		free (e->name);
+		free (comp_buf);
+		return -1;
+	}
+	e->comp_size = comp_size;
 
 	/* Write local file header */
 	mzip_write_local_header (za->fp, e->name, e->method, e->comp_size, e->uncomp_size, e->crc32);
@@ -997,7 +1053,7 @@ zip_int64_t zip_file_add(zip_t *za, const char *name, zip_source_t *src, zip_fla
 
 	/* Free source data if requested */
 	if (src->freep) {
-		free ((void*)src->buf);
+		free ((void *)src->buf);
 	}
 	free (src);
 
@@ -1021,37 +1077,37 @@ int zip_set_file_compression(zip_t *za, zip_uint64_t index, zip_int32_t comp, zi
 #ifdef MZIP_ENABLE_STORE
 	if (comp == MZIP_METHOD_STORE) {
 		/* Store is always supported */
-	} 
+	}
 #endif
 #ifdef MZIP_ENABLE_DEFLATE
 	else if (comp == MZIP_METHOD_DEFLATE) {
 		/* Deflate is supported */
-	} 
+	}
 #endif
 #ifdef MZIP_ENABLE_ZSTD
 	else if (comp == MZIP_METHOD_ZSTD) {
 		/* Zstd is supported */
-	} 
+	}
 #endif
 #ifdef MZIP_ENABLE_LZFSE
 	else if (comp == MZIP_METHOD_LZFSE) {
 		/* LZFSE is supported */
-	} 
+	}
 #endif
 #ifdef MZIP_ENABLE_LZ4
 	else if (comp == MZIP_METHOD_LZ4) {
 		/* LZ4 is supported */
-	} 
+	}
 #endif
 #ifdef MZIP_ENABLE_LZMA
 	else if (comp == MZIP_METHOD_LZMA) {
 		/* LZMA is supported */
-	} 
+	}
 #endif
 #ifdef MZIP_ENABLE_BROTLI
 	else if (comp == MZIP_METHOD_BROTLI) {
 		/* Brotli is supported */
-	} 
+	}
 #endif
 	else {
 		/* Unsupported compression method */
@@ -1073,28 +1129,30 @@ static int mzip_finalize_archive(zip_t *za) {
 	if (cd_offset < 0) {
 		return -1;
 	}
-    /* Write central directory headers. Accumulate in 64-bit and ensure
-     * the final size and offset fit into the 32-bit EOCD fields before
-     * writing them. */
-    uint64_t cd_size_acc = 0;
-    for (zip_uint64_t i = 0; i < za->n_entries; i++) {
-        struct mzip_entry *e = &za->entries[i];
-        uint32_t written = mzip_write_central_header (za->fp, e->name, e->method,
-                e->comp_size, e->uncomp_size, e->crc32,
-                e->local_hdr_ofs, e->file_time, e->file_date, e->external_attr);
-        cd_size_acc += written;
-        if (cd_size_acc > (uint64_t)UINT32_MAX) {
-            /* central directory too large for ZIP32 EOCD */
-            return -1;
-        }
-    }
+	/* Write central directory headers. Accumulate in 64-bit and ensure
+	 * the final size and offset fit into the 32-bit EOCD fields before
+	 * writing them. */
+	uint64_t cd_size_acc = 0;
+	for (zip_uint64_t i = 0; i < za->n_entries; i++) {
+		struct mzip_entry *e = &za->entries[i];
+		uint32_t written = mzip_write_central_header (za->fp, e->name, e->method,
+			e->comp_size, e->uncomp_size, e->crc32,
+			e->local_hdr_ofs, e->file_time, e->file_date, e->external_attr);
+		cd_size_acc += written;
+		if (cd_size_acc > (uint64_t)UINT32_MAX) {
+			/* central directory too large for ZIP32 EOCD */
+			return -1;
+		}
+	}
 
-    /* Ensure central directory offset fits into 32-bit */
-    if ((uint64_t)cd_offset > (uint64_t)UINT32_MAX) return -1;
+	/* Ensure central directory offset fits into 32-bit */
+	if ((uint64_t)cd_offset > (uint64_t)UINT32_MAX) {
+		return -1;
+	}
 
-    /* Write end of central directory record */
-    mzip_write_end_of_central_directory (za->fp, (uint32_t)za->n_entries,
-            (uint32_t)cd_size_acc, (uint32_t)cd_offset);
+	/* Write end of central directory record */
+	mzip_write_end_of_central_directory (za->fp, (uint32_t)za->n_entries,
+		(uint32_t)cd_size_acc, (uint32_t)cd_offset);
 	return 0;
 }
 
@@ -1117,17 +1175,19 @@ int zip_close(zip_t *za) {
 		}
 	}
 	free (za->entries);
-	free(za);
+	free (za);
 	return 0;
 }
 
 zip_uint64_t zip_get_num_files(zip_t *za) {
-	return za ? za->n_entries : 0u;
+	return za? za->n_entries: 0u;
 }
 
 zip_int64_t zip_name_locate(zip_t *za, const char *fname, zip_flags_t flags) {
 	(void)flags; /* flags (case sensitivity etc.) not implemented */
-	if (!za || !fname) return -1;
+	if (!za || !fname) {
+		return -1;
+	}
 
 	for (zip_uint64_t i = 0; i < za->n_entries; i++) {
 		if (strcmp (za->entries[i].name, fname) == 0) {
@@ -1142,12 +1202,12 @@ zip_file_t *zip_fopen_index(zip_t *za, zip_uint64_t index, zip_flags_t flags) {
 	if (!za || index >= za->n_entries) {
 		return NULL;
 	}
-    uint8_t  *buf = NULL;
-    uint32_t  sz = 0;
+	uint8_t *buf = NULL;
+	uint32_t sz = 0;
 	if (mzip_extract_entry (za, &za->entries[index], &buf, &sz) != 0) {
 		return NULL;
 	}
-	zip_file_t *zf = (zip_file_t*)malloc(sizeof(zip_file_t));
+	zip_file_t *zf = (zip_file_t *)malloc (sizeof (zip_file_t));
 	if (!zf) {
 		free (buf);
 		return NULL;
@@ -1167,11 +1227,13 @@ int zip_fclose(zip_file_t *zf) {
 }
 
 /* Helper function to write local file header */
-static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t comp_method, 
-    uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32) {
-    size_t filename_len_sz = strlen(name);
-    if (filename_len_sz > MZIP_MAX_FIELD_LEN) filename_len_sz = MZIP_MAX_FIELD_LEN;
-    uint16_t filename_len = (uint16_t)filename_len_sz;
+static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t comp_method,
+	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32) {
+	size_t filename_len_sz = strlen (name);
+	if (filename_len_sz > MZIP_MAX_FIELD_LEN) {
+		filename_len_sz = MZIP_MAX_FIELD_LEN;
+	}
+	uint16_t filename_len = (uint16_t)filename_len_sz;
 	uint8_t header[30];
 
 	/* Write local file header signature */
@@ -1188,7 +1250,7 @@ static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t com
 
 	/* Last mod file time & date */
 	uint16_t file_time, file_date;
-	mzip_get_dostime(&file_time, &file_date);
+	mzip_get_dostime (&file_time, &file_date);
 	mzip_wr16 (header + 10, file_time);
 	mzip_wr16 (header + 12, file_date);
 
@@ -1218,18 +1280,20 @@ static uint32_t mzip_write_local_header(FILE *fp, const char *name, uint32_t com
 
 /* Helper function to write central directory header */
 static uint32_t mzip_write_central_header(FILE *fp, const char *name, uint32_t comp_method,
-    uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32,
-    uint32_t local_header_offset, uint16_t file_time, uint16_t file_date, uint32_t external_attr) {
-    size_t filename_len_sz = strlen(name);
-    if (filename_len_sz > MZIP_MAX_FIELD_LEN) filename_len_sz = MZIP_MAX_FIELD_LEN;
-    uint16_t filename_len = (uint16_t)filename_len_sz;
+	uint32_t comp_size, uint32_t uncomp_size, uint32_t crc32,
+	uint32_t local_header_offset, uint16_t file_time, uint16_t file_date, uint32_t external_attr) {
+	size_t filename_len_sz = strlen (name);
+	if (filename_len_sz > MZIP_MAX_FIELD_LEN) {
+		filename_len_sz = MZIP_MAX_FIELD_LEN;
+	}
+	uint16_t filename_len = (uint16_t)filename_len_sz;
 	uint8_t header[46];
 
 	/* Central directory file header signature */
 	mzip_wr32 (header, MZIP_SIG_CDH);
 
 	/* Version made by (UNIX, version 2.0) */
-	mzip_wr16 (header + 4, 0x031e); 
+	mzip_wr16 (header + 4, 0x031e);
 
 	/* Version needed to extract (2.0) */
 	mzip_wr16 (header + 6, 20);
@@ -1284,8 +1348,8 @@ static uint32_t mzip_write_central_header(FILE *fp, const char *name, uint32_t c
 }
 
 /* Helper function to write end of central directory record */
-static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries, 
-		uint32_t central_dir_size, uint32_t central_dir_offset) {
+static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
+	uint32_t central_dir_size, uint32_t central_dir_offset) {
 	uint8_t eocd[22];
 
 	/* End of central directory signature */
@@ -1318,7 +1382,7 @@ static void mzip_write_end_of_central_directory(FILE *fp, uint32_t num_entries,
 
 zip_source_t *zip_source_buffer(zip_t *za, const void *data, zip_uint64_t len, int freep) {
 	(void)za;
-	zip_source_t *src = (zip_source_t*)malloc (sizeof (zip_source_t));
+	zip_source_t *src = (zip_source_t *)malloc (sizeof (zip_source_t));
 	src->buf = data;
 	src->len = len;
 	src->freep = freep;

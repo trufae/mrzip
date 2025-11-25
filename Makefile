@@ -36,4 +36,7 @@ test2:
 clean:
 	rm -rf build mzip
 
-.PHONY: all mall clean install uninstall test test2
+fmt indent:
+	find . -name "*.c" -exec clang-format-radare2 -i {} \;
+
+.PHONY: all mall clean install uninstall test test2 fmt-indent

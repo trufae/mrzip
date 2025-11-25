@@ -32,40 +32,40 @@
 /* ------------- API Constants (compatible with zlib) ------------- */
 
 /* Return codes (from zlib for compatibility) */
-#define Z_OK            0
-#define Z_STREAM_END    1
-#define Z_NEED_DICT     2
-#define Z_ERRNO        (-1)
+#define Z_OK 0
+#define Z_STREAM_END 1
+#define Z_NEED_DICT 2
+#define Z_ERRNO (-1)
 #define Z_STREAM_ERROR (-2)
-#define Z_DATA_ERROR   (-3)
-#define Z_MEM_ERROR    (-4)
-#define Z_BUF_ERROR    (-5)
+#define Z_DATA_ERROR (-3)
+#define Z_MEM_ERROR (-4)
+#define Z_BUF_ERROR (-5)
 #define Z_VERSION_ERROR (-6)
 
 /* Flush values */
-#define Z_NO_FLUSH      0
+#define Z_NO_FLUSH 0
 #define Z_PARTIAL_FLUSH 1
-#define Z_SYNC_FLUSH    2
-#define Z_FULL_FLUSH    3
-#define Z_FINISH        4
+#define Z_SYNC_FLUSH 2
+#define Z_FULL_FLUSH 3
+#define Z_FINISH 4
 
 /* Strategy values */
-#define Z_DEFAULT_STRATEGY    0
+#define Z_DEFAULT_STRATEGY 0
 
 /* Compression level */
-#define Z_NO_COMPRESSION      0
-#define Z_BEST_SPEED          1
-#define Z_BEST_COMPRESSION    9
+#define Z_NO_COMPRESSION 0
+#define Z_BEST_SPEED 1
+#define Z_BEST_COMPRESSION 9
 #ifndef Z_DEFAULT_COMPRESSION
 #define Z_DEFAULT_COMPRESSION 1
 #endif
 
 /* ZSTD-specific constants */
-#define ZSTD_MAGIC_NUMBER      0xFD2FB528   /* Magic number for Zstandard frame */
-#define ZSTD_FRAME_HEADER_SIZE 5           /* Minimum frame header size */
-#define ZSTD_BLOCK_MAX_SIZE    128 * 1024  /* Maximum block size */
-#define ZSTD_WINDOW_LOG_MAX    24          /* Max window log size */
-#define ZSTD_DEFAULT_CLEVEL    3           /* Default compression level */
+#define ZSTD_MAGIC_NUMBER 0xFD2FB528 /* Magic number for Zstandard frame */
+#define ZSTD_FRAME_HEADER_SIZE 5 /* Minimum frame header size */
+#define ZSTD_BLOCK_MAX_SIZE 128 * 1024 /* Maximum block size */
+#define ZSTD_WINDOW_LOG_MAX 24 /* Max window log size */
+#define ZSTD_DEFAULT_CLEVEL 3 /* Default compression level */
 
 /* ------------- Data Structures ------------- */
 
@@ -83,8 +83,8 @@ typedef struct {
 /* Zstandard block header */
 typedef struct {
 	uint32_t block_size;
-	uint8_t  block_type;
-	uint8_t  is_last_block;
+	uint8_t block_type;
+	uint8_t is_last_block;
 } zstd_block_header;
 
 /* Zstandard compression context */
@@ -130,26 +130,26 @@ typedef struct {
 extern "C" {
 #endif
 
-	/* Forward declarations */
-	/* Compression */
-	int zstdInit(z_stream *strm, int level);
-	int zstdCompress(z_stream *strm, int flush);
-	int zstdEnd(z_stream *strm);
+/* Forward declarations */
+/* Compression */
+int zstdInit(z_stream *strm, int level);
+int zstdCompress(z_stream *strm, int flush);
+int zstdEnd(z_stream *strm);
 
-	/* Decompression */
-	int zstdDecompressInit(z_stream *strm);
-	int zstdDecompress(z_stream *strm, int flush);
-	int zstdDecompressEnd(z_stream *strm);
+/* Decompression */
+int zstdDecompressInit(z_stream *strm);
+int zstdDecompress(z_stream *strm, int flush);
+int zstdDecompressEnd(z_stream *strm);
 
-	/* Helpers for zlib compatibility layer */
-	int zstdCompressInit2(z_stream *strm, int level, int windowBits, 
-			int memLevel, int strategy);
-	int zstdDecompressInit2(z_stream *strm, int windowBits);
-	int zstdCompressInit2_(z_stream *strm, int level, int windowBits,
-			int memLevel, int strategy, 
-			const char *version, int stream_size);
-	int zstdDecompressInit2_(z_stream *strm, int windowBits,
-			const char *version, int stream_size);
+/* Helpers for zlib compatibility layer */
+int zstdCompressInit2(z_stream *strm, int level, int windowBits,
+	int memLevel, int strategy);
+int zstdDecompressInit2(z_stream *strm, int windowBits);
+int zstdCompressInit2_(z_stream *strm, int level, int windowBits,
+	int memLevel, int strategy,
+	const char *version, int stream_size);
+int zstdDecompressInit2_(z_stream *strm, int windowBits,
+	const char *version, int stream_size);
 
 #ifdef __cplusplus
 }
@@ -163,25 +163,25 @@ extern "C" {
 /* Read a 32-bit little-endian value */
 static uint32_t read_le32(const void *ptr) {
 	const uint8_t *p = (const uint8_t *)ptr;
-	return ((uint32_t)p[0]) | 
-		((uint32_t)p[1] << 8) | 
-		((uint32_t)p[2] << 16) | 
+	return ((uint32_t)p[0]) |
+		((uint32_t)p[1] << 8) |
+		((uint32_t)p[2] << 16) |
 		((uint32_t)p[3] << 24);
 }
 
 /* Simple RLE compression for Zstandard block */
-static int compress_block(const uint8_t *src, size_t src_size, 
-        uint8_t *dst, size_t dst_capacity, 
-                int level) {
-    (void)level; /* Unused in this minimal implementation */
+static int compress_block(const uint8_t *src, size_t src_size,
+	uint8_t *dst, size_t dst_capacity,
+	int level) {
+	(void)level; /* Unused in this minimal implementation */
 	/* This is a very simplified compression that only does basic RLE */
 	if (src_size == 0 || !src || !dst) {
-		return 0;  /* Empty input or invalid pointers */
+		return 0; /* Empty input or invalid pointers */
 	}
 
 	/* Check if there's enough space for output */
 	if (dst_capacity < src_size + 1) {
-		return 0;  /* Not enough output capacity */
+		return 0; /* Not enough output capacity */
 	}
 
 	/* For this minimal implementation, we'll just do a simple RLE */
@@ -191,23 +191,23 @@ static int compress_block(const uint8_t *src, size_t src_size,
 	while (src_pos < src_size) {
 		/* Check remaining output space */
 		if (dst_pos + 3 > dst_capacity) {
-			return 0;  /* Not enough space */
+			return 0; /* Not enough space */
 		}
 
 		/* Find run of identical bytes */
 		uint8_t run_byte = src[src_pos];
 		size_t run_length = 1;
 
-		while (src_pos + run_length < src_size && 
-				src[src_pos + run_length] == run_byte &&
-				run_length < 255) {
+		while (src_pos + run_length < src_size &&
+			src[src_pos + run_length] == run_byte &&
+			run_length < 255) {
 			run_length++;
 		}
 
 		if (run_length >= 4) {
 			/* Encode run */
-			dst[dst_pos++] = 0;          /* RLE marker */
-			dst[dst_pos++] = run_byte;   /* Repeated byte */
+			dst[dst_pos++] = 0; /* RLE marker */
+			dst[dst_pos++] = run_byte; /* Repeated byte */
 			dst[dst_pos++] = run_length; /* Length */
 			src_pos += run_length;
 		} else {
@@ -217,14 +217,14 @@ static int compress_block(const uint8_t *src, size_t src_size,
 		}
 	}
 
-	return dst_pos;  /* Return compressed size */
+	return dst_pos; /* Return compressed size */
 }
 
 /* Simple decompression for our Zstandard block */
 static int decompress_block(const uint8_t *src, size_t src_size,
-		uint8_t *dst, size_t dst_capacity) {
+	uint8_t *dst, size_t dst_capacity) {
 	if (src_size == 0 || !src || !dst) {
-		return 0;  /* Empty input or invalid pointers */
+		return 0; /* Empty input or invalid pointers */
 	}
 
 	size_t dst_pos = 0;
@@ -239,7 +239,7 @@ static int decompress_block(const uint8_t *src, size_t src_size,
 
 			/* Check output capacity */
 			if (dst_pos + length > dst_capacity) {
-				return 0;  /* Output overflow */
+				return 0; /* Output overflow */
 			}
 
 			/* Output run */
@@ -249,20 +249,22 @@ static int decompress_block(const uint8_t *src, size_t src_size,
 		} else {
 			/* Literal byte */
 			if (dst_pos >= dst_capacity) {
-				return 0;  /* Output overflow */
+				return 0; /* Output overflow */
 			}
 			dst[dst_pos++] = src[src_pos++];
 		}
 	}
 
-	return dst_pos;  /* Return decompressed size */
+	return dst_pos; /* Return decompressed size */
 }
 
 /* --- Zstandard API Implementation --- */
 
 /* Initialize a compression stream */
 int zstdInit(z_stream *strm, int level) {
-	if (!strm) return Z_STREAM_ERROR;
+	if (!strm) {
+		return Z_STREAM_ERROR;
+	}
 
 	/* Setup default level */
 	if (level == Z_DEFAULT_COMPRESSION) {
@@ -270,28 +272,30 @@ int zstdInit(z_stream *strm, int level) {
 	}
 
 	/* Allocate compression context */
-	zstd_compress_context *ctx = (zstd_compress_context *)calloc(1, sizeof(zstd_compress_context));
-	if (!ctx) return Z_MEM_ERROR;
+	zstd_compress_context *ctx = (zstd_compress_context *)calloc (1, sizeof (zstd_compress_context));
+	if (!ctx) {
+		return Z_MEM_ERROR;
+	}
 
 	/* Initialize context */
 	ctx->compression_level = level;
-	ctx->window_size = 1 << 17;  /* 128KB window by default */
+	ctx->window_size = 1 << 17; /* 128KB window by default */
 	ctx->block_size = ZSTD_BLOCK_MAX_SIZE;
 	ctx->is_last_block = 0;
 
 	/* Allocate window buffer for LZ77 */
-	ctx->window_buffer = (uint8_t *)malloc(ctx->window_size);
+	ctx->window_buffer = (uint8_t *)malloc (ctx->window_size);
 	if (!ctx->window_buffer) {
-		free(ctx);
+		free (ctx);
 		return Z_MEM_ERROR;
 	}
 
 	/* Allocate compression buffer */
 	ctx->compress_buffer_size = ctx->block_size * 2; /* Over-allocate for worst case */
-	ctx->compress_buffer = (uint8_t *)malloc(ctx->compress_buffer_size);
+	ctx->compress_buffer = (uint8_t *)malloc (ctx->compress_buffer_size);
 	if (!ctx->compress_buffer) {
-		free(ctx->window_buffer);
-		free(ctx);
+		free (ctx->window_buffer);
+		free (ctx);
 		return Z_MEM_ERROR;
 	}
 
@@ -305,7 +309,9 @@ int zstdInit(z_stream *strm, int level) {
 
 /* Compress data using Zstandard format */
 int zstdCompress(z_stream *strm, int flush) {
-	if (!strm || !strm->state) return Z_STREAM_ERROR;
+	if (!strm || !strm->state) {
+		return Z_STREAM_ERROR;
+	}
 
 	zstd_compress_context *ctx = (zstd_compress_context *)strm->state;
 
@@ -317,14 +323,14 @@ int zstdCompress(z_stream *strm, int flush) {
 		}
 
 		/* Write Zstandard frame header (simplified) */
-		uint8_t header[4] = {0xFD, 0x2F, 0xB5, 0x28};  /* Magic number */
-		memcpy(strm->next_out, header, 4);
+		uint8_t header[4] = { 0xFD, 0x2F, 0xB5, 0x28 }; /* Magic number */
+		memcpy (strm->next_out, header, 4);
 		strm->next_out += 4;
 		strm->avail_out -= 4;
 		strm->total_out += 4;
 
 		/* Window descriptor (using default settings) */
-		strm->next_out[0] = 0x70;  /* Window log = 17 (128 KB) */
+		strm->next_out[0] = 0x70; /* Window log = 17 (128 KB) */
 		strm->next_out++;
 		strm->avail_out--;
 		strm->total_out++;
@@ -336,8 +342,7 @@ int zstdCompress(z_stream *strm, int flush) {
 	/* Process input data */
 	while (strm->avail_in > 0 || ctx->is_last_block) {
 		/* Determine block size */
-		uint32_t block_size = strm->avail_in < ctx->block_size ? 
-			strm->avail_in : ctx->block_size;
+		uint32_t block_size = strm->avail_in < ctx->block_size? strm->avail_in: ctx->block_size;
 
 		/* Skip if no input data and not final block */
 		if (block_size == 0 && !ctx->is_last_block) {
@@ -352,7 +357,7 @@ int zstdCompress(z_stream *strm, int flush) {
 		/* If this is an empty final block, write a special block */
 		if (block_size == 0 && ctx->is_last_block) {
 			/* Write empty last block (type=0, size=0, last=1) */
-			strm->next_out[0] = 0x01;  /* Last block bit set */
+			strm->next_out[0] = 0x01; /* Last block bit set */
 			strm->next_out += 1;
 			strm->avail_out -= 1;
 			strm->total_out += 1;
@@ -364,9 +369,9 @@ int zstdCompress(z_stream *strm, int flush) {
 		/* Try to compress the block */
 		int compressed_size = 0;
 		if (block_size > 0) {
-			compressed_size = compress_block(strm->next_in, block_size,
-					ctx->compress_buffer, ctx->compress_buffer_size,
-					ctx->compression_level);
+			compressed_size = compress_block (strm->next_in, block_size,
+				ctx->compress_buffer, ctx->compress_buffer_size,
+				ctx->compression_level);
 		}
 
 		/* Decide whether to write compressed or raw block */
@@ -374,8 +379,8 @@ int zstdCompress(z_stream *strm, int flush) {
 		uint8_t *block_content;
 		uint32_t content_size;
 
-                if (compressed_size > 0 && (uint32_t)compressed_size < block_size) {
-                    /* Compressed block (type=2) */
+		if (compressed_size > 0 && (uint32_t)compressed_size < block_size) {
+			/* Compressed block (type=2) */
 			block_header = 0x02;
 			block_content = ctx->compress_buffer;
 			content_size = compressed_size;
@@ -409,7 +414,7 @@ int zstdCompress(z_stream *strm, int flush) {
 		}
 
 		/* Write block content */
-		memcpy(strm->next_out, block_content, content_size);
+		memcpy (strm->next_out, block_content, content_size);
 		strm->next_out += content_size;
 		strm->avail_out -= content_size;
 		strm->total_out += content_size;
@@ -421,9 +426,9 @@ int zstdCompress(z_stream *strm, int flush) {
 			strm->total_in += block_size;
 
 			/* Update window buffer for future references */
-			memcpy(ctx->window_buffer + ctx->window_pos, 
-					strm->next_in - block_size, 
-					block_size);
+			memcpy (ctx->window_buffer + ctx->window_pos,
+				strm->next_in - block_size,
+				block_size);
 			ctx->window_pos = (ctx->window_pos + block_size) % ctx->window_size;
 		}
 
@@ -438,19 +443,21 @@ int zstdCompress(z_stream *strm, int flush) {
 
 /* End a compression stream */
 int zstdEnd(z_stream *strm) {
-	if (!strm || !strm->state) return Z_STREAM_ERROR;
+	if (!strm || !strm->state) {
+		return Z_STREAM_ERROR;
+	}
 
 	zstd_compress_context *ctx = (zstd_compress_context *)strm->state;
 
 	/* Free allocated buffers */
-	free(ctx->window_buffer);
-	free(ctx->compress_buffer);
+	free (ctx->window_buffer);
+	free (ctx->compress_buffer);
 	if (ctx->dict) {
-		free(ctx->dict);
+		free (ctx->dict);
 	}
 
 	/* Free context */
-	free(ctx);
+	free (ctx);
 	strm->state = NULL;
 
 	return Z_OK;
@@ -458,29 +465,33 @@ int zstdEnd(z_stream *strm) {
 
 /* Initialize a decompression stream */
 int zstdDecompressInit(z_stream *strm) {
-	if (!strm) return Z_STREAM_ERROR;
+	if (!strm) {
+		return Z_STREAM_ERROR;
+	}
 
 	/* Allocate decompression context */
-	zstd_decompress_context *ctx = (zstd_decompress_context *)calloc(1, sizeof(zstd_decompress_context));
-	if (!ctx) return Z_MEM_ERROR;
+	zstd_decompress_context *ctx = (zstd_decompress_context *)calloc (1, sizeof (zstd_decompress_context));
+	if (!ctx) {
+		return Z_MEM_ERROR;
+	}
 
 	/* Initialize context with default values */
-	ctx->window_size = 1 << 17;  /* 128KB window by default */
+	ctx->window_size = 1 << 17; /* 128KB window by default */
 	ctx->is_last_block = 0;
 
 	/* Allocate window buffer */
-	ctx->window_buffer = (uint8_t *)malloc(ctx->window_size);
+	ctx->window_buffer = (uint8_t *)malloc (ctx->window_size);
 	if (!ctx->window_buffer) {
-		free(ctx);
+		free (ctx);
 		return Z_MEM_ERROR;
 	}
 
 	/* Allocate decompression buffer */
 	ctx->decompress_buffer_size = ZSTD_BLOCK_MAX_SIZE;
-	ctx->decompress_buffer = (uint8_t *)malloc(ctx->decompress_buffer_size);
+	ctx->decompress_buffer = (uint8_t *)malloc (ctx->decompress_buffer_size);
 	if (!ctx->decompress_buffer) {
-		free(ctx->window_buffer);
-		free(ctx);
+		free (ctx->window_buffer);
+		free (ctx);
 		return Z_MEM_ERROR;
 	}
 
@@ -494,10 +505,10 @@ int zstdDecompressInit(z_stream *strm) {
 
 /* Decompress data using Zstandard format */
 int zstdDecompress(z_stream *strm, int flush) {
-    if (!strm || !strm->state) {
-        return Z_STREAM_ERROR;
-    }
-    (void)flush;
+	if (!strm || !strm->state) {
+		return Z_STREAM_ERROR;
+	}
+	(void)flush;
 
 	zstd_decompress_context *ctx = (zstd_decompress_context *)strm->state;
 
@@ -509,7 +520,7 @@ int zstdDecompress(z_stream *strm, int flush) {
 		}
 
 		/* Check magic number */
-		uint32_t magic = read_le32(strm->next_in);
+		uint32_t magic = read_le32 (strm->next_in);
 		if (magic != ZSTD_MAGIC_NUMBER) {
 			return Z_DATA_ERROR;
 		}
@@ -534,10 +545,10 @@ int zstdDecompress(z_stream *strm, int flush) {
 			}
 
 			/* Copy data to output */
-			memcpy(strm->next_out, 
-					ctx->decompress_buffer + 
-					(ctx->current_block_size - ctx->current_block_remaining), 
-					copy_size);
+			memcpy (strm->next_out,
+				ctx->decompress_buffer +
+					(ctx->current_block_size - ctx->current_block_remaining),
+				copy_size);
 
 			/* Update counters */
 			strm->next_out += copy_size;
@@ -546,9 +557,9 @@ int zstdDecompress(z_stream *strm, int flush) {
 			ctx->current_block_remaining -= copy_size;
 
 			/* Copy to window buffer */
-			memcpy(ctx->window_buffer + ctx->window_pos, 
-					strm->next_out - copy_size, 
-					copy_size);
+			memcpy (ctx->window_buffer + ctx->window_pos,
+				strm->next_out - copy_size,
+				copy_size);
 			ctx->window_pos = (ctx->window_pos + copy_size) % ctx->window_size;
 
 			/* Check if we're out of output space */
@@ -565,7 +576,7 @@ int zstdDecompress(z_stream *strm, int flush) {
 			uint8_t block_type = (block_header >> 1) & 0x03;
 
 			/* Get block size */
-			uint32_t block_size = ((uint32_t)strm->next_in[2] << 8) | 
+			uint32_t block_size = ((uint32_t)strm->next_in[2] << 8) |
 				strm->next_in[1];
 
 			/* Skip header */
@@ -586,15 +597,15 @@ int zstdDecompress(z_stream *strm, int flush) {
 
 				/* Copy raw block to output if space allows */
 				if (strm->avail_out >= block_size) {
-					memcpy(strm->next_out, strm->next_in, block_size);
+					memcpy (strm->next_out, strm->next_in, block_size);
 					strm->next_out += block_size;
 					strm->avail_out -= block_size;
 					strm->total_out += block_size;
 
 					/* Copy to window buffer */
-					memcpy(ctx->window_buffer + ctx->window_pos, 
-							strm->next_in, 
-							block_size);
+					memcpy (ctx->window_buffer + ctx->window_pos,
+						strm->next_in,
+						block_size);
 					ctx->window_pos = (ctx->window_pos + block_size) % ctx->window_size;
 
 					/* Advance input */
@@ -605,16 +616,16 @@ int zstdDecompress(z_stream *strm, int flush) {
 					/* Store in temporary buffer to output in chunks */
 					if (block_size > ctx->decompress_buffer_size) {
 						/* Reallocate buffer if needed */
-						free(ctx->decompress_buffer);
+						free (ctx->decompress_buffer);
 						ctx->decompress_buffer_size = block_size;
-						ctx->decompress_buffer = (uint8_t *)malloc(ctx->decompress_buffer_size);
+						ctx->decompress_buffer = (uint8_t *)malloc (ctx->decompress_buffer_size);
 						if (!ctx->decompress_buffer) {
 							return Z_MEM_ERROR;
 						}
 					}
 
 					/* Copy to buffer */
-					memcpy(ctx->decompress_buffer, strm->next_in, block_size);
+					memcpy (ctx->decompress_buffer, strm->next_in, block_size);
 					ctx->current_block_size = block_size;
 					ctx->current_block_remaining = block_size;
 
@@ -637,25 +648,25 @@ int zstdDecompress(z_stream *strm, int flush) {
 				}
 
 				/* Decompress the block */
-				int decompressed_size = decompress_block(
-						strm->next_in, block_size,
-						ctx->decompress_buffer, ctx->decompress_buffer_size);
+				int decompressed_size = decompress_block (
+					strm->next_in, block_size,
+					ctx->decompress_buffer, ctx->decompress_buffer_size);
 
 				if (decompressed_size <= 0) {
 					return Z_DATA_ERROR;
 				}
 
 				/* Output if space allows */
-                if (strm->avail_out >= (uint32_t)decompressed_size) {
-                    memcpy(strm->next_out, ctx->decompress_buffer, decompressed_size);
-                    strm->next_out += decompressed_size;
-                    strm->avail_out -= decompressed_size;
+				if (strm->avail_out >= (uint32_t)decompressed_size) {
+					memcpy (strm->next_out, ctx->decompress_buffer, decompressed_size);
+					strm->next_out += decompressed_size;
+					strm->avail_out -= decompressed_size;
 					strm->total_out += decompressed_size;
 
 					/* Copy to window buffer */
-					memcpy(ctx->window_buffer + ctx->window_pos, 
-							ctx->decompress_buffer, 
-							decompressed_size);
+					memcpy (ctx->window_buffer + ctx->window_pos,
+						ctx->decompress_buffer,
+						decompressed_size);
 					ctx->window_pos = (ctx->window_pos + decompressed_size) % ctx->window_size;
 				} else {
 					/* Store for partial output */
@@ -690,19 +701,21 @@ int zstdDecompress(z_stream *strm, int flush) {
 
 /* End a decompression stream */
 int zstdDecompressEnd(z_stream *strm) {
-	if (!strm || !strm->state) return Z_STREAM_ERROR;
+	if (!strm || !strm->state) {
+		return Z_STREAM_ERROR;
+	}
 
 	zstd_decompress_context *ctx = (zstd_decompress_context *)strm->state;
 
 	/* Free allocated buffers */
-	free(ctx->window_buffer);
-	free(ctx->decompress_buffer);
+	free (ctx->window_buffer);
+	free (ctx->decompress_buffer);
 	if (ctx->dict) {
-		free(ctx->dict);
+		free (ctx->dict);
 	}
 
 	/* Free context */
-	free(ctx);
+	free (ctx);
 	strm->state = NULL;
 
 	return Z_OK;
@@ -710,32 +723,32 @@ int zstdDecompressEnd(z_stream *strm) {
 
 /* --- zlib compatibility layer --- */
 
-int zstdCompressInit2(z_stream *strm, int level, int windowBits, 
-		int memLevel, int strategy) {
-	(void)windowBits;  /* Unused */
-	(void)memLevel;    /* Unused */
-	(void)strategy;    /* Unused */
-	return zstdInit(strm, level);
+int zstdCompressInit2(z_stream *strm, int level, int windowBits,
+	int memLevel, int strategy) {
+	(void)windowBits; /* Unused */
+	(void)memLevel; /* Unused */
+	(void)strategy; /* Unused */
+	return zstdInit (strm, level);
 }
 
 int zstdDecompressInit2(z_stream *strm, int windowBits) {
-	(void)windowBits;  /* Unused */
-	return zstdDecompressInit(strm);
+	(void)windowBits; /* Unused */
+	return zstdDecompressInit (strm);
 }
 
 int zstdCompressInit2_(z_stream *strm, int level, int windowBits,
-		int memLevel, int strategy, 
-		const char *version, int stream_size) {
-	(void)version;     /* Unused */
+	int memLevel, int strategy,
+	const char *version, int stream_size) {
+	(void)version; /* Unused */
 	(void)stream_size; /* Unused */
-	return zstdCompressInit2(strm, level, windowBits, memLevel, strategy);
+	return zstdCompressInit2 (strm, level, windowBits, memLevel, strategy);
 }
 
 int zstdDecompressInit2_(z_stream *strm, int windowBits,
-		const char *version, int stream_size) {
-	(void)version;     /* Unused */
+	const char *version, int stream_size) {
+	(void)version; /* Unused */
 	(void)stream_size; /* Unused */
-	return zstdDecompressInit2(strm, windowBits);
+	return zstdDecompressInit2 (strm, windowBits);
 }
 
 #endif /* MZSTD_IMPLEMENTATION */

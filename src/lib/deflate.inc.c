@@ -31,40 +31,40 @@
 /* ------------- API Constants (compatible with zlib) ------------- */
 
 /* Return codes */
-#define Z_OK            0
-#define Z_STREAM_END    1
-#define Z_NEED_DICT     2
-#define Z_ERRNO        (-1)
+#define Z_OK 0
+#define Z_STREAM_END 1
+#define Z_NEED_DICT 2
+#define Z_ERRNO (-1)
 #define Z_STREAM_ERROR (-2)
-#define Z_DATA_ERROR   (-3)
-#define Z_MEM_ERROR    (-4)
-#define Z_BUF_ERROR    (-5)
+#define Z_DATA_ERROR (-3)
+#define Z_MEM_ERROR (-4)
+#define Z_BUF_ERROR (-5)
 #define Z_VERSION_ERROR (-6)
 
-#define Z_DEFLATED   8
+#define Z_DEFLATED 8
 
 /* Flush values */
-#define Z_NO_FLUSH      0
+#define Z_NO_FLUSH 0
 #define Z_PARTIAL_FLUSH 1
-#define Z_SYNC_FLUSH    2
-#define Z_FULL_FLUSH    3
-#define Z_FINISH        4
+#define Z_SYNC_FLUSH 2
+#define Z_FULL_FLUSH 3
+#define Z_FINISH 4
 
 /* Strategy values */
-#define Z_FILTERED            1
-#define Z_HUFFMAN_ONLY        2
-#define Z_RLE                 3
-#define Z_FIXED               4
-#define Z_DEFAULT_STRATEGY    0
+#define Z_FILTERED 1
+#define Z_HUFFMAN_ONLY 2
+#define Z_RLE 3
+#define Z_FIXED 4
+#define Z_DEFAULT_STRATEGY 0
 
 /* Compression level */
-#define Z_NO_COMPRESSION      0
-#define Z_BEST_SPEED          1
-#define Z_BEST_COMPRESSION    9
+#define Z_NO_COMPRESSION 0
+#define Z_BEST_SPEED 1
+#define Z_BEST_COMPRESSION 9
 #define Z_DEFAULT_COMPRESSION (-1)
 
 /* Window bits */
-#define MAX_WBITS 15      /* 32K window size */
+#define MAX_WBITS 15 /* 32K window size */
 
 /* ------------- Data Structures ------------- */
 
@@ -74,10 +74,10 @@ typedef unsigned int uInt;
 
 /* Conservative upper bound for deflate output size, zlib-compatible API */
 static inline uLong compressBound(uLong sourceLen) {
-    /* Conservative bound: input + 1/8 + fixed overhead */
-    uLong extra = (sourceLen >> 3) + 64u;
-    uLong bound = sourceLen + extra + 11u;
-    return (bound < sourceLen) ? sourceLen : bound;
+	/* Conservative bound: input + 1/8 + fixed overhead */
+	uLong extra = (sourceLen >> 3) + 64u;
+	uLong bound = sourceLen + extra + 11u;
+	return (bound < sourceLen)? sourceLen: bound;
 }
 
 /* Unified z_stream definition */
@@ -89,18 +89,18 @@ static inline uLong compressBound(uLong sourceLen) {
 extern "C" {
 #endif
 
-	/* Forward declarations */
-	int inflateInit2(z_stream *strm, int windowBits);
-	int inflateInit2_(z_stream *strm, int windowBits, const char *version, int stream_size);
-	int inflate(z_stream *strm, int flush);
-	int inflateEnd(z_stream *strm);
+/* Forward declarations */
+int inflateInit2(z_stream *strm, int windowBits);
+int inflateInit2_(z_stream *strm, int windowBits, const char *version, int stream_size);
+int inflate(z_stream *strm, int flush);
+int inflateEnd(z_stream *strm);
 
-	int deflateInit2(z_stream *strm, int level, int method, int windowBits,
-			int memLevel, int strategy);
-	int deflateInit2_(z_stream *strm, int level, int method, int windowBits,
-			int memLevel, int strategy, const char *version, int stream_size);
-	int deflate(z_stream *strm, int flush);
-	int deflateEnd(z_stream *strm);
+int deflateInit2(z_stream *strm, int level, int method, int windowBits,
+	int memLevel, int strategy);
+int deflateInit2_(z_stream *strm, int level, int method, int windowBits,
+	int memLevel, int strategy, const char *version, int stream_size);
+int deflate(z_stream *strm, int flush);
+int deflateEnd(z_stream *strm);
 
 #ifdef __cplusplus
 }
@@ -111,9 +111,9 @@ extern "C" {
 
 /* Huffman code table */
 typedef struct {
-	uint16_t codes[288];     /* Huffman codes */
-	uint8_t lengths[288];    /* Code lengths */
-	uint16_t count;          /* Number of codes */
+	uint16_t codes[288]; /* Huffman codes */
+	uint8_t lengths[288]; /* Code lengths */
+	uint16_t count; /* Number of codes */
 } huffman_table;
 
 /* Block type */
