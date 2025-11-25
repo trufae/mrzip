@@ -63,7 +63,7 @@
 /* ------------- Data Structures ------------- */
 
 /* Unified z_stream declaration */
-#include "zstream.h"
+#include "../include/zstream.h"
 
 /* LZMA compression context */
 typedef struct {

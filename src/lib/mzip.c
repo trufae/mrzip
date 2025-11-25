@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "mzip.h"
-#include "zstream.h"
+#include "../include/zstream.h"
 
 #if defined(_WIN32) || defined(_WIN64)
 /* Ensure we have thread-safe fallback for localtime on Windows builds */
@@ -449,32 +449,7 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 #endif
 #ifdef MZIP_ENABLE_DEFLATE
 	else if (e->method == MZIP_METHOD_DEFLATE) { /* deflate */
-		/* Special case for our test files */
-		if (e->uncomp_size == 6) {
-			/* Manual hardcoded solution for the test cases */
-			ubuf = (uint8_t*)malloc(7);
-			if (!ubuf) {
-				free(cbuf);
-				return -1;
-			}
 
-			if (memcmp(cbuf, "hello\n", 6) == 0 || memcmp(cbuf, "hello", 5) == 0) {
-				memcpy(ubuf, "hello\n", 6);
-				ubuf[6] = 0;
-				*out_buf = ubuf;
-				*out_sz = 6;
-				free(cbuf);
-				return 0;
-			} else if (memcmp(cbuf, "world\n", 6) == 0 || memcmp(cbuf, "world", 5) == 0) {
-				memcpy(ubuf, "world\n", 6);
-				ubuf[6] = 0;
-				*out_buf = ubuf;
-				*out_sz = 6;
-				free(cbuf);
-				return 0;
-			} 
-			/* If the special case didn't match, continue with normal decompression */
-		}
 
 		/* Allocate output buffer with extra space just in case */
 		ubuf = (uint8_t*)malloc(e->uncomp_size + 10);
@@ -510,15 +485,9 @@ static int mzip_extract_entry(zip_t *za, struct mzip_entry *e, uint8_t **out_buf
 
 		/* If decompression failed */
 		if (ret != Z_STREAM_END) {
-			/* Special case for test files */
-			if (e->uncomp_size == 6 && e->comp_size <= 8) {
-				if (memcmp((char*)cbuf, "hello", 5) != 0 && memcmp((char*)cbuf, "world", 5) != 0) {
-					strcpy((char*)ubuf, "hello\n");
-				}
-			}
-
+			free(ubuf);
 			free(cbuf);
-			return 0;
+			return -1;
 		}
 
 		free(cbuf);

@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "zstream.h"
+#include "../include/zstream.h"
 #include "mzip.h" /* for read/write little-endian helpers */
 
 typedef struct {

@@ -5,7 +5,8 @@
 
 /* Include LZMA implementation */
 #define MZIP_ENABLE_LZMA
-#include "../../src/lzma.inc.c"  /* This will include both encoder and decoder */
+#include "../../src/include/zstream.h"
+#include "../../src/lib/lzma.inc.c"  /* This will include both encoder and decoder */
 
 /* Simple test to compress and decompress data using LZMA */
 int test_lzma_compress_decompress() {
@@ -15,11 +16,8 @@ int test_lzma_compress_decompress() {
     uint8_t compressed[1024] = {0};
     uint8_t decompressed[1024] = {0};
 
-    /* Compress with our LZMA implementation */
-    z_stream c_strm = {0};
-    c_strm.zalloc = Z_NULL;
-    c_strm.zfree = Z_NULL;
-    c_strm.opaque = Z_NULL;
+	/* Compress with our LZMA implementation */
+	z_stream c_strm = {0};
 
     if (lzmaInit(&c_strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
         printf("lzmaInit failed\n");
@@ -45,11 +43,8 @@ int test_lzma_compress_decompress() {
     printf("Original data size: %zu bytes\n", data_len);
     printf("Compressed data size: %zu bytes\n", compressed_len);
 
-    /* Now decompress */
-    z_stream d_strm = {0};
-    d_strm.zalloc = Z_NULL;
-    d_strm.zfree = Z_NULL;
-    d_strm.opaque = Z_NULL;
+	/* Now decompress */
+	z_stream d_strm = {0};
 
     if (lzmaDecompressInit(&d_strm) != Z_OK) {
         printf("lzmaDecompressInit failed\n");
@@ -115,9 +110,6 @@ int test_lzma_large_data() {
     
     /* Compress */
     z_stream c_strm = {0};
-    c_strm.zalloc = Z_NULL;
-    c_strm.zfree = Z_NULL;
-    c_strm.opaque = Z_NULL;
     
     if (lzmaInit(&c_strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
         printf("lzmaInit failed\n");
@@ -150,9 +142,6 @@ int test_lzma_large_data() {
     
     /* Decompress */
     z_stream d_strm = {0};
-    d_strm.zalloc = Z_NULL;
-    d_strm.zfree = Z_NULL;
-    d_strm.opaque = Z_NULL;
     
     if (lzmaDecompressInit(&d_strm) != Z_OK) {
         printf("lzmaDecompressInit failed\n");

@@ -16,13 +16,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* We need zlib.h for z_stream definition */
-#include <zlib.h>
+/* z_stream is defined in zstream.h */
 
 /* Define MBROTLI_IMPLEMENTATION to include the implementation */
 #define MBROTLI_IMPLEMENTATION
-#define MZIP_ENABLE_BROTLI
-#include "../brotli.inc.c"
+#include "../../src/lib/brotli.inc.c"
 
 /* Maximum buffer sizes */
 #define MAX_COMP_SIZE 1024

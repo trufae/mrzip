@@ -70,7 +70,7 @@
 /* ------------- Data Structures ------------- */
 
 /* Unified z_stream declaration */
-#include "zstream.h"
+#include "../include/zstream.h"
 
 /* Zstandard frame header */
 typedef struct {
